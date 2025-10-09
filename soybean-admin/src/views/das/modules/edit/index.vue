@@ -59,11 +59,16 @@ interface EditorPane {
   result?: any;
   loading?: boolean;
   responseMsg?: string;
+  pagination?: {
+    currentPage: number;
+    pageSize: number;
+    total: number;
+  };
 }
 
 const panes = ref<EditorPane[]>([
   {
-    title: 'Tab 1',
+    title: 'SQLConsole',
     key: '1',
     closable: false,
     sql: '',
@@ -72,9 +77,13 @@ const panes = ref<EditorPane[]>([
     theme: 'default',
     result: null,
     loading: false,
-    responseMsg: ''
+    responseMsg: '',
+    pagination: { currentPage: 1, pageSize: 20, total: 0 }
   }
 ]);
+
+const defaultPageSize = 20;
+const pageSizes = [10, 20, 50, 100];
 
 const tabIndex = computed(() => {
   return panes.value.findIndex((v) => v.key === activeKey.value);
@@ -392,7 +401,7 @@ const onEdit = (targetKey: string, action: 'add' | 'remove') => {
 const add = () => {
   const activeKeyValue = newTabIndex.value++;
   panes.value.push({
-    title: `New Tab ${activeKeyValue}`,
+    title: `SQLConsole ${activeKeyValue}`,
     key: activeKeyValue.toString(),
     closable: true,
     sql: loadCodeFromCache(`dms-codemirror-${activeKeyValue}`),
@@ -401,7 +410,8 @@ const add = () => {
     theme: 'default',
     result: null,
     loading: false,
-    responseMsg: ''
+    responseMsg: '',
+    pagination: { currentPage: 1, pageSize: defaultPageSize, total: 0 }
   });
   activeKey.value = activeKeyValue.toString();
 };
@@ -493,6 +503,7 @@ const executeMySQLQuery = async (pane: EditorPane, data: any) => {
     
     // 更新表格列设置
     updateTableColumnChecks(pane);
+    initPagination(pane);
     
     window.$message?.success('执行成功');
   } catch (error: any) {
@@ -548,6 +559,7 @@ const executeClickHouseQuery = async (pane: EditorPane, data: any) => {
     
     // 更新表格列设置
     updateTableColumnChecks(pane);
+    initPagination(pane);
     
     window.$message?.success('执行成功');
   } catch (error: any) {
@@ -644,37 +656,7 @@ const loadDBDictData = async () => {
   }
 };
 
-// 测试表格数据
-const testTableData = (pane: EditorPane) => {
-  console.log('Testing table data...');
-  
-  // 使用更简单的数据结构
-  const testData = [
-    { id: 1, name: '张三', email: 'zhangsan@example.com', created_at: '2024-01-01' },
-    { id: 2, name: '李四', email: 'lisi@example.com', created_at: '2024-01-02' },
-    { id: 3, name: '王五', email: 'wangwu@example.com', created_at: '2024-01-03' },
-    { id: 4, name: '赵六', email: 'zhaoliu@example.com', created_at: '2024-01-04' },
-    { id: 5, name: '钱七', email: 'qianqi@example.com', created_at: '2024-01-05' }
-  ];
-  
-  pane.result = {
-    columns: ['id', 'name', 'email', 'created_at'],
-    data: testData,
-    rows: testData, // 同时提供两种格式
-    duration: '50ms',
-    affected_rows: 5,
-    affectedRows: 5
-  };
-  
-  pane.responseMsg = '结果: 执行成功<br>耗时: 50ms<br>SQL: SELECT * FROM test_table<br>请求ID: TEST-123';
-  
-  console.log('Test data set:', pane.result);
-  
-  // 更新表格列设置
-  updateTableColumnChecks(pane);
-  
-  window.$message?.success('测试数据已加载');
-};
+
 
 // 缓存管理
 const saveCodeToCache = (pane: EditorPane) => {
@@ -758,6 +740,39 @@ const getTableData = (pane: EditorPane) => {
   
   console.log('getTableData: returning empty array');
   return [];
+};
+
+// 初始化/更新分页统计
+const initPagination = (pane: EditorPane) => {
+  const total = getTableData(pane).length;
+  if (!pane.pagination) {
+    pane.pagination = { currentPage: 1, pageSize: defaultPageSize, total };
+  } else {
+    pane.pagination.total = total;
+    const maxPage = Math.max(1, Math.ceil(total / (pane.pagination.pageSize || defaultPageSize)));
+    if (pane.pagination.currentPage > maxPage) pane.pagination.currentPage = maxPage;
+  }
+};
+
+// 按分页切片后的数据
+const getPagedTableData = (pane: EditorPane) => {
+  const full = getTableData(pane);
+  const currentPage = pane.pagination?.currentPage ?? 1;
+  const pageSize = pane.pagination?.pageSize ?? defaultPageSize;
+  const start = (currentPage - 1) * pageSize;
+  const end = start + pageSize;
+  return full.slice(start, end);
+};
+
+// 分页变更事件
+const onPageChange = (pane: EditorPane, currentPage: number, pageSize: number) => {
+  if (!pane.pagination) {
+    pane.pagination = { currentPage, pageSize, total: getTableData(pane).length };
+  } else {
+    pane.pagination.currentPage = currentPage;
+    pane.pagination.pageSize = pageSize;
+    pane.pagination.total = getTableData(pane).length;
+  }
 };
 
 // 表格列设置
@@ -946,36 +961,7 @@ onUnmounted(() => {
               <div class="tab-content">
                 <!-- 上半部分：编辑器区域 -->
                 <div class="editor-area">
-                  <NSpace vertical :size="12">
-                    <!-- 工具栏 -->
-                    <NCard size="small" :bordered="false">
-                      <NSpace vertical :size="8">
-                      <NGrid cols="24" x-gap="12" y-gap="8">
-                          <NGi span="24 m:12">
-                            <NInput
-                              v-model:value="pane.sessionVars"
-                              placeholder="group_concat_max_len=4194304;sql_mode=''"
-                              clearable
-                            />
-                        </NGi>
-                          <NGi span="12 m:6">
-                            <NSelect
-                              v-model:value="pane.characterSet"
-                              :options="characterSets"
-                              placeholder="选择字符集"
-                            />
-                        </NGi>
-                          <NGi span="12 m:6">
-                            <NSelect
-                              v-model:value="pane.theme"
-                              :options="codeThemes"
-                              placeholder="选择主题"
-                            />
-                        </NGi>
-                      </NGrid>
-                      </NSpace>
-                    </NCard>
-                    
+                  <NSpace vertical :size="12">               
                     <!-- SQL编辑器 -->
                     <NCard size="small" :bordered="false">
                       <div
@@ -1041,7 +1027,7 @@ onUnmounted(() => {
                         调试: 列数={{ getTableColumns(pane).length }}, 行数={{ getTableData(pane).length }}
                       </div>
                       <vxe-table
-                        :data="getTableData(pane)"
+                        :data="getPagedTableData(pane)"
                         border
                         stripe
                         :height="400"
@@ -1057,6 +1043,16 @@ onUnmounted(() => {
                           :min-width="col.minWidth || 120"
                         />
                       </vxe-table>
+                      <div class="mt-8px">
+                        <vxe-pager
+                          :current-page="pane.pagination?.currentPage || 1"
+                          :page-size="pane.pagination?.pageSize || 20"
+                          :total="pane.pagination?.total ?? getTableData(pane).length"
+                          :page-sizes="pageSizes"
+                          :layouts="['PrevPage','Number','NextPage','Sizes','Total']"
+                          @page-change="(params) => onPageChange(pane, params.currentPage, params.pageSize)"
+                        />
+                      </div>
                     </div>
                     <div v-else class="empty-result">
                       <NEmpty description="查询无结果" />
@@ -1123,7 +1119,7 @@ onUnmounted(() => {
   flex: 1;
   height: 100%;
   padding-left: 6px;
-  overflow: hidden;
+  overflow: auto;
 }
 
 /* CodeMirror container styles */
