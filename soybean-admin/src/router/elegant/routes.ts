@@ -46,46 +46,41 @@ export const generatedRoutes: GeneratedRoute[] = [
     meta: {
       title: 'das',
       i18nKey: 'route.das',
-      icon: 'mdi:database-search',
+      icon: 'mdi:database',
       order: 2
     },
     children: [
       {
-        name: 'das_modules',
-        path: '/das/modules',
+        name: 'das_modules_edit',
+        path: '/das/modules/edit',
+        component: 'view.das_modules_edit',
         meta: {
-          title: 'das_modules',
-          i18nKey: 'route.das_modules'
-        },
-        children: [
-          {
-            name: 'das_modules_edit',
-            path: '/das/modules/edit',
-            component: 'view.das_modules_edit',
-            meta: {
-              title: 'das_modules_edit',
-              i18nKey: 'route.das_modules_edit'
-            }
-          },
-          {
-            name: 'das_modules_favorite',
-            path: '/das/modules/favorite',
-            component: 'view.das_modules_favorite',
-            meta: {
-              title: 'das_modules_favorite',
-              i18nKey: 'route.das_modules_favorite'
-            }
-          },
-          {
-            name: 'das_modules_history',
-            path: '/das/modules/history',
-            component: 'view.das_modules_history',
-            meta: {
-              title: 'das_modules_history',
-              i18nKey: 'route.das_modules_history'
-            }
-          }
-        ]
+          title: 'das_modules_edit',
+          i18nKey: 'route.das_modules_edit',
+          icon: 'mdi:database-search'
+        }
+      },
+      {
+        name: 'das_modules_favorite',
+        path: '/das/modules/favorite',
+        component: 'view.das_modules_favorite',
+        meta: {
+          title: 'das_modules_favorite',
+          i18nKey: 'route.das_modules_favorite',
+          hideInMenu: true,
+          activeMenu: 'das_modules_edit'
+        }
+      },
+      {
+        name: 'das_modules_history',
+        path: '/das/modules/history',
+        component: 'view.das_modules_history',
+        meta: {
+          title: 'das_modules_history',
+          i18nKey: 'route.das_modules_history',
+          hideInMenu: true,
+          activeMenu: 'das_modules_edit'
+        }
       }
     ]
   },

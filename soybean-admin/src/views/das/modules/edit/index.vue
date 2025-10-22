@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, nextTick, onUnmounted, h, watch } from 'vue';
+import { ref, computed, onMounted, nextTick, onUnmounted, h, watch, resolveComponent } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { format } from 'sql-formatter';
 import { fetchExecuteMySQLQuery, fetchExecuteClickHouseQuery, fetchSchemas, fetchTables, fetchUserGrants, fetchDBDict, fetchTableInfo } from '@/service/api/das';
@@ -13,6 +13,7 @@ import { sql } from '@codemirror/lang-sql';
 import { foldGutter, foldKeymap, syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language';
 import { oneDark } from '@codemirror/theme-one-dark';
 import { autocompletion, completionKeymap } from '@codemirror/autocomplete';
+import { useRouter } from 'vue-router';
 // 使用普通textarea
 
 const { t } = useI18n();
@@ -36,6 +37,14 @@ const refreshLoading = ref(false);
 const tableInfoVisible = ref(false);
 const selectedKeys = ref<any>({});
 const leftTableSearch = ref('');
+// 新增：追踪树展开的键集合 & 列分组展开集合
+const expandedKeys = ref<any[]>([]);
+const columnsGroupExpanded = ref<Set<string | number>>(new Set());
+
+// 路由跳转：收藏SQL、历史查询
+const router = useRouter();
+const gotoFavorite = () => router.push({ name: 'das_modules_favorite' });
+const gotoHistory = () => router.push({ name: 'das_modules_history' });
 
 // 过滤后的树数据
 const filteredTreeData = computed(() => {
@@ -46,6 +55,109 @@ const filteredTreeData = computed(() => {
     return title.includes(kw);
   });
 });
+
+// 自定义左侧 NTree 节点渲染：左侧字段名，右侧类型/列数
+const renderTreeLabel = ({ option }: { option: any }) => {
+  const SvgIcon = resolveComponent('SvgIcon') as any;
+  const label = option.label || '';
+
+  // 叶子节点：列
+  if (option.isLeaf) {
+    // 兼容两种排列：
+    // 1) 列名 类型    2) 类型 列名
+    const parts = String(label).split(/\s+/).filter(Boolean);
+    let name = label;
+    let type = '';
+    if (parts.length > 1) {
+      const first = parts[0];
+      const rest = parts.slice(1).join(' ');
+      const typeKeywords = [
+        'varchar', 'char', 'text', 'longtext', 'mediumtext', 'tinytext', 'int', 'bigint', 'smallint', 'tinyint',
+        'decimal', 'double', 'float', 'datetime', 'timestamp', 'date', 'time', 'json'
+      ];
+      const isTypeFirst = /\)/.test(first) || typeKeywords.some(k => first.toLowerCase().startsWith(k));
+      if (isTypeFirst) {
+        type = first;
+        name = rest;
+      } else {
+        name = first;
+        type = rest;
+      }
+    }
+    return h(
+      'span',
+      { class: 'das-tree-item' },
+      [
+        h('span', { class: 'das-tree-item-left' }, [
+          h(SvgIcon, { icon: 'carbon:list', class: 'mr-6px text-14px text-info' }),
+          h('span', { class: 'das-tree-item-name' }, name)
+        ]),
+        h('span', { class: 'das-tree-item-type' }, type)
+      ]
+    );
+  }
+
+  // 表节点：仅在展开时显示第二行“列(数量)”并可开关
+  const count = Array.isArray(option.children) ? option.children.length : 0;
+  const isNodeExpanded = expandedKeys.value?.includes?.(option.key);
+  const groupOpened = columnsGroupExpanded.value.has(option.key);
+  return h(
+    'span',
+    { class: 'das-tree-item das-tree-item-table' },
+    [
+      // 第一行：图标 + 表名
+      h('span', { class: 'das-tree-item-left' }, [
+        h(SvgIcon, { icon: 'mdi:table', class: 'text-14px text-info' }),
+        h('span', { class: 'das-tree-item-name' }, label)
+      ]),
+      // 第二行：仅在展开时显示“列(数量)”且可独立展开/收起列清单
+      isNodeExpanded && count ? h('span', { class: 'das-tree-item-meta-row' }, [
+        h(
+          'span',
+          {
+            class: 'das-tree-item-count das-tree-item-count-toggle',
+            onClick: (e: MouseEvent) => { e.stopPropagation(); toggleColumnsGroup(option.key); }
+          },
+          [
+            h(SvgIcon, { icon: groupOpened ? 'carbon:chevron-down' : 'carbon:chevron-right', class: 'mr-2px text-14px' }),
+            `列(${count})`
+          ]
+        )
+      ]) : null
+    ]
+  );
+};
+
+// 自定义展开/折叠图标为更常见的箭头（右/下），并禁用默认旋转
+const renderSwitcherIcon = ({ expanded }: { expanded: boolean }) => {
+  const SvgIcon = resolveComponent('SvgIcon') as any;
+  return h(
+    SvgIcon,
+    { icon: expanded ? 'carbon:chevron-down' : 'carbon:chevron-right', class: 'das-tree-switcher-icon', style: 'transform: none' }
+  );
+};
+
+// 新增：切换表节点下“列”分组展开/收起
+function toggleColumnsGroup(key: string | number) {
+  if (columnsGroupExpanded.value.has(key)) {
+    columnsGroupExpanded.value.delete(key);
+  } else {
+    columnsGroupExpanded.value.add(key);
+  }
+}
+
+// 新增：按开关过滤子节点返回（仅当分组展开时返回列）
+function getNodeChildren(option: any) {
+  if (!option) return [];
+  // 叶子节点原样返回（通常无 children）
+  if (option.isLeaf) return option.children || [];
+  // 表节点：只有当该表的“列”分组被打开时才返回列清单
+  const key = option.key;
+  if (columnsGroupExpanded.value.has(key)) {
+    return option.children || [];
+  }
+  return [];
+}
 
 // 标签页数据
 interface EditorPane {
@@ -218,22 +330,6 @@ watch(
   { deep: true }
 );
 
-
-// 字符集选项
-const characterSets = [
-  { label: 'utf8', value: 'utf8' },
-  { label: 'utf8mb4', value: 'utf8mb4' },
-  { label: 'latin1', value: 'latin1' }
-];
-
-// 主题选项
-const codeThemes = [
-  { label: 'VS Dark', value: 'vs-dark' },
-  { label: 'VS Light', value: 'vs' },
-  { label: 'High Contrast Dark', value: 'hc-black' },
-  { label: 'High Contrast Light', value: 'hc-light' }
-];
-
 // 编辑器实例引用
 const editorRefs = ref<Record<string, any>>({});
 
@@ -311,6 +407,30 @@ const getTables = async (value: string) => {
   }
 };
 
+// 刷新当前库的表列表（不改变已选择的库）
+const refreshTables = async () => {
+  if (!selectedSchema.value?.instance_id || !selectedSchema.value?.schema) {
+    window.$message?.warning('请先选择左侧的库');
+    return;
+  }
+  treeLoading.value = true;
+  try {
+    const { data } = await fetchTables({
+      instance_id: selectedSchema.value.instance_id,
+      schema: selectedSchema.value.schema
+    });
+    if (data) {
+      const grants = await getGrants(selectedSchema.value);
+      renderTree(grants, data);
+      window.$message?.success('表列表已刷新');
+    }
+  } catch (error: any) {
+    window.$message?.error(error?.message || '刷新失败');
+  } finally {
+    treeLoading.value = false;
+  }
+};
+
 const checkTableRule = (grants: any, table: string) => {
   if (grants?.tables?.length === 1 && grants.tables === '*') {
     return true;
@@ -383,6 +503,8 @@ const renderTree = (grants: any, data: any[]) => {
   treeData.value = tmpTreeData;
   searchTreeData.value = [...tmpTreeData];
   tabCompletion.value = tmpTabCompletion;
+  // 默认将每个表的“列”分组设为展开
+  columnsGroupExpanded.value = new Set(tmpTreeData.map((n: any) => n.key));
 };
 
 // 右侧编辑器方法
@@ -777,14 +899,32 @@ const onPageChange = (pane: EditorPane, currentPage: number, pageSize: number) =
 
 // 表格列设置
 const tableColumnChecks = ref<NaiveUI.TableColumnCheck[]>([]);
+// 派生勾选映射，便于快速判断列是否显示
+const tableColumnCheckMap = computed<Record<string, boolean>>(() => {
+  const map: Record<string, boolean> = {};
+  tableColumnChecks.value.forEach((c) => {
+    map[c.key] = !!c.checked;
+  });   
+  return map;
+});
 
-// 更新表格列设置
+// 根据勾选状态返回可见列
+const getVisibleColumns = (pane: EditorPane) => {
+  const columns = getTableColumns(pane);
+  return columns.filter((c: any) => tableColumnCheckMap.value[c.key] !== false);
+};
+
+// 更新表格列设置（保留已有勾选状态）
 const updateTableColumnChecks = (pane: EditorPane) => {
   const columns = getTableColumns(pane);
+  const oldMap: Record<string, boolean> = {};
+  tableColumnChecks.value.forEach((c) => {
+    oldMap[c.key] = !!c.checked;
+  });
   tableColumnChecks.value = columns.map((col: any) => ({
     key: col.key as string,
     title: col.title as string,
-    checked: true
+    checked: Object.prototype.hasOwnProperty.call(oldMap, col.key) ? oldMap[col.key] : true
   }));
 };
 
@@ -794,45 +934,14 @@ const onEditorChange = (pane: EditorPane, value: string) => {
   saveCodeToCache(pane);
 };
 
-// 拖拽相关
-const isDragging = ref(false);
-const startX = ref(0);
-const startWidth = ref(asideWidth.value);
-
-const onMouseDown = (e: MouseEvent) => {
-  if (asideWidth.value === 0) return;
-  isDragging.value = true;
-  startX.value = e.clientX;
-  startWidth.value = asideWidth.value;
-  document.addEventListener('mousemove', onMouseMove);
-  document.addEventListener('mouseup', onMouseUp);
-};
-
-const onMouseMove = (e: MouseEvent) => {
-  if (!isDragging.value) return;
-  const dx = e.clientX - startX.value;
-  const next = startWidth.value + dx;
-  asideWidth.value = Math.min(800, Math.max(64, next));
-  
-  if (asideWidth.value < 64) {
-    asideWidth.value = 0;
-    onMouseUp();
-  }
-};
-
-const onMouseUp = () => {
-  if (!isDragging.value) return;
-  isDragging.value = false;
-  document.removeEventListener('mousemove', onMouseMove);
-  document.removeEventListener('mouseup', onMouseUp);
-};
+// 已移除拖拽分隔逻辑，使用组件自身布局属性实现
 
 // 树节点点击
 const handleNodeClick = (keys: string[], e: any) => {
   console.log('Node clicked:', keys, e);
 };
 
-// 树节点双击填充SQL
+// 树节点双击填充SQL（改为追加，不替换原内容）
 const handleNodeDblClick = (key: string) => {
   if (!key) return;
   const parts = key.split('#');
@@ -842,11 +951,12 @@ const handleNodeDblClick = (key: string) => {
   const p = currentPane.value;
   const dbType = selectedSchema.value['db_type']?.toLowerCase() || 'mysql';
   
-  if (dbType === 'clickhouse') {
-    p.sql = `SELECT * FROM "${schema}"."${table}" LIMIT 100;`;
-  } else {
-    p.sql = `SELECT * FROM \`${schema}\`.\`${table}\` LIMIT 100;`;
-  }
+  const query = dbType === 'clickhouse'
+    ? `SELECT * FROM "${schema}"."${table}" LIMIT 100;`
+    : `SELECT * FROM \`${schema}\`.\`${table}\` LIMIT 100;`;
+  
+  // 追加到现有内容；若为空则直接赋值
+  p.sql = p.sql && p.sql.length > 0 ? `${p.sql}\n\n${query}` : query;
 };
 
 onMounted(async () => {
@@ -855,92 +965,98 @@ onMounted(async () => {
 });
 
 onUnmounted(() => {
-  document.removeEventListener('mousemove', onMouseMove);
-  document.removeEventListener('mouseup', onMouseUp);
 });
 </script>
 
 <template>
-  <div class="das-edit-container">
-    <NCard :bordered="false" class="edit-card">
-      <div class="fold-container">
-        <!-- 左侧面板 -->
-        <div 
-          v-show="asideWidth > 0" 
-          class="left-panel" 
-          :style="{ width: asideWidth + 'px' }"
-        >
-          <NCard size="small" title="数据库列表" :bordered="false">
-              <NSpace vertical :size="8">
-                <NGrid cols="24" x-gap="8" y-gap="4">
-                  <NGi span="20">
-                    <NSelect
+    <NCard size="small" :content-style="{ padding: '0px' }">
+      <NLayout has-sider style="height: calc(100vh - 160px)">
+        <NLayoutSider :collapsed="asideWidth === 0" :collapsed-width="0" :width="asideWidth" native-scrollbar>
+          <NCard size="small" title="数据库列表">
+            <NSpace vertical :size="8">
+              <NGrid cols="24" x-gap="8" y-gap="4">
+                <NGi span="20">
+                  <NSelect
                     v-model:value="bindTitle"
                     :options="schemas.map((s: any) => ({ 
                       label: `${s.remark || s.instanceName || s.hostname}:${s.schema}`,
                       value: `${s.instance_id}#${s.schema}#${s.db_type}`
                     }))"
-                      filterable
-                      clearable
-                      placeholder="请选择库名..."
+                    filterable
+                    clearable
+                    placeholder="请选择库名..."
                     @update:value="getTables"
-                    />
-                  </NGi>
-                  <NGi span="4" class="flex items-center justify-end">
-                    <NTooltip trigger="hover">
+                  />
+                </NGi>
+                <NGi span="4">
+                  <NSpace :size="8" justify="end" :wrap="false">
+                    <NTooltip trigger="hover" placement="top" :show-arrow="false">
                       <template #trigger>
-                      <NButton quaternary circle :loading="refreshLoading" @click="refreshSchemas">
+                        <NButton quaternary circle size="small" :loading="refreshLoading" @click="refreshSchemas">
                           <template #icon>
-                            <SvgIcon icon="i-carbon-renew" />
+                            <SvgIcon icon="carbon:renew" />
                           </template>
                         </NButton>
                       </template>
-                      动态刷新库名
+                      刷新数据库列表
                     </NTooltip>
-                  </NGi>
-                </NGrid>
-              
-              <NInput 
-                v-if="showSearch" 
-                v-model:value="leftTableSearch" 
-                clearable 
-                placeholder="输入要搜索的表名..."
-                @keyup.enter="onSearch(leftTableSearch)"
-              />
-              
-              <NSpin :show="treeLoading">
-                <div class="tree-container">
-                <NTree
+                    <NTooltip trigger="hover" placement="top" :show-arrow="false">
+                      <template #trigger>
+                        <NButton quaternary circle size="small" @click="foldLeft">
+                          <template #icon>
+                            <SvgIcon :icon="asideWidth === 0 ? 'line-md:menu-fold-right' : 'line-md:menu-fold-left'" />
+                          </template>
+                        </NButton>
+                      </template>
+                      折叠/展开左侧
+                    </NTooltip>
+                  </NSpace>
+                </NGi>
+              </NGrid>
+              <NGrid v-if="showSearch" cols="24" x-gap="8" y-gap="4">
+                <NGi span="24">
+                  <NInput 
+                    v-model:value="leftTableSearch" 
+                    clearable 
+                    placeholder="输入要搜索的表名..."
+                    @keyup.enter="onSearch(leftTableSearch)"
+                  />
+                </NGi>
+              </NGrid>
+              <NText depth="3">搜索不到需要的表？试试右侧的刷新按钮。</NText>
+              <NScrollbar style="max-height: calc(100vh - 300px)">
+                <NSpin :show="treeLoading">
+                  <NTree
                     :data="filteredTreeData"
-                  block-line
-                  :virtual-scroll="true"
-                    :node-props="(info: any) => ({
-                      onDblclick: () => handleNodeDblClick(info.option.key)
-                    })"
+                    block-line
+                    show-line
+                    :virtual-scroll="true"
+                    :render-label="renderTreeLabel"
+                    :render-switcher-icon="renderSwitcherIcon"
+                    :get-children="getNodeChildren"
+                    v-model:expanded-keys="expandedKeys"
+                    :node-props="(info: any) => ({ onDblclick: () => handleNodeDblClick(info.option.key) })"
                     @update:selected-keys="handleNodeClick"
                   />
-                </div>
-              </NSpin>
-              </NSpace>
-            </NCard>
-        </div>
-        
-        <!-- 分割线 -->
-        <div class="divider" @mousedown="onMouseDown">
-          <NButton
-            v-if="asideWidth === 0"
-            circle
-            quaternary
-            @click="foldLeft"
-          >
-            <template #icon>
-              <SvgIcon icon="i-carbon-chevron-right" />
-            </template>
-          </NButton>
-        </div>
-        
-        <!-- 右侧主要内容区 -->
-        <div class="main-panel">
+                </NSpin>
+              </NScrollbar>
+            </NSpace>
+          </NCard>
+        </NLayoutSider>
+        <NLayoutContent native-scrollbar>
+          <NSpace v-if="asideWidth === 0" :size="8">
+            <NTooltip trigger="hover" placement="top" :show-arrow="false">
+              <template #trigger>
+                <NButton quaternary size="small" @click="foldLeft">
+                  <template #icon>
+                    <SvgIcon icon="line-md:menu-fold-right" />
+                  </template>
+                  展开左侧
+                </NButton>
+              </template>
+              展开左侧栏
+            </NTooltip>
+          </NSpace>
           <NTabs
             v-model:value="activeKey"
             type="card"
@@ -956,272 +1072,222 @@ onUnmounted(() => {
               :name="pane.key"
               :tab="pane.title"
               :closable="pane.closable"
-              class="tab-pane-container"
             >
-              <div class="tab-content">
-                <!-- 上半部分：编辑器区域 -->
-                <div class="editor-area">
-                  <NSpace vertical :size="12">               
-                    <!-- SQL编辑器 -->
-                    <NCard size="small" :bordered="false">
-                      <div
-                        class="sql-editor cm-container"
-                        :ref="(el) => setEditorRef(pane, el as unknown as HTMLElement)"
-                      />
-                      
-                      <NSpace class="mt-8px">
-                      <NButton type="primary" :loading="pane.loading" @click="executeSQL(pane)">
-                          <template #icon><SvgIcon icon="i-carbon-flash" /></template>
-                          执行SQL
-                      </NButton>
-                        <NButton @click="formatSQL(pane)">
-                          <template #icon><SvgIcon icon="i-carbon-code" /></template>
-                          格式化
-                        </NButton>
-                        <NButton @click="loadDBDictData">
-                          <template #icon><SvgIcon icon="i-carbon-document" /></template>
-                          数据字典
-                          </NButton>
-                      <NButton quaternary @click="foldLeft">
-                          <template #icon><SvgIcon :icon="asideWidth === 0 ? 'i-carbon-chevron-right' : 'i-carbon-chevron-left'" /></template>
-                          {{ asideWidth === 0 ? '展开' : '收起' }}左侧
-                      </NButton>
-                  </NSpace>
+              <NSpace vertical :size="12">
+                <NCard size="small" :content-style="{ padding: '8px' }">
+                  <div class="code-editor-container" :ref="(el) => setEditorRef(pane, el as unknown as HTMLElement)" />
+                  <NSpace :size="6">
+                    <NButton size="tiny" type="primary" :loading="pane.loading" @click="executeSQL(pane)">
+                      <template #icon><SvgIcon icon="carbon:flash" /></template>
+                      执行SQL
+                    </NButton>
+                    <NButton size="tiny" @click="formatSQL(pane)">
+                      <template #icon><SvgIcon icon="carbon:code" /></template>
+                      格式化
+                    </NButton>
+                    <NButton size="tiny" @click="loadDBDictData">
+                      <template #icon><SvgIcon icon="carbon:document" /></template>
+                      数据字典
+                    </NButton>
+                    <NButton size="tiny" @click="gotoFavorite">
+                      <template #icon><SvgIcon icon="carbon:star" /></template>
+                      收藏SQL
+                    </NButton>
+                    <NButton size="tiny" @click="gotoHistory">
+                      <template #icon><SvgIcon icon="carbon:time" /></template>
+                      历史查询
+                    </NButton>
+                  </NSpace> 
                 </NCard>
-                    
-                    <!-- 响应消息 -->
-                    <NCard v-if="pane.responseMsg" size="small" title="执行结果" :bordered="true" class="response-card">
-                      <div v-html="pane.responseMsg" class="response-msg"></div>
-                    </NCard>
-                  </NSpace>
-                </div>
-                
-                <!-- 下半部分：查询结果区域 -->
-                <div class="result-area">
-                  <!-- 查询结果 -->
-                  <NCard v-if="pane.result" size="small" :bordered="true" class="result-card">
-                    <template #header>
-                      <NSpace justify="space-between" align="center">
-                        <span>查询结果</span>
-                        <NSpace>
-                          <NButton size="small" @click="updateTableColumnChecks(pane)">
-                            <template #icon>
-                              <SvgIcon icon="i-carbon-refresh" />
-                            </template>
-                            刷新列设置
-                          </NButton>
-                          <TableColumnSetting v-model:columns="tableColumnChecks" />
-                        </NSpace>
+              </NSpace>
+              <div>
+                <NCard v-if="pane.result" size="small" :bordered="true" :content-style="{ padding: '8px' }">
+                  <template #header>
+                    <NSpace justify="space-between" align="center">
+                      <span>查询结果</span>
+                      <NSpace>
+                        <TableColumnSetting v-model:columns="tableColumnChecks" />
                       </NSpace>
-                    </template>
-                    
-                    <NDescriptions label-placement="left" bordered size="small" :column="3" class="mb-12px">
-                      <NDescriptionsItem label="耗时">{{ pane.result?.duration || '-' }}</NDescriptionsItem>
-                      <NDescriptionsItem label="影响行数">{{ pane.result?.affected_rows ?? pane.result?.affectedRows ?? '-' }}</NDescriptionsItem>
-                      <NDescriptionsItem label="返回行数">{{ (pane.result?.rows?.length || pane.result?.data?.length || 0) }}</NDescriptionsItem>
-                  </NDescriptions>
-                    
-                    <div v-if="getTableData(pane).length > 0" class="table-container">
-                      <!-- 调试信息 -->
-                      <div style="font-size: 12px; color: #666; margin-bottom: 8px;">
-                        调试: 列数={{ getTableColumns(pane).length }}, 行数={{ getTableData(pane).length }}
-                      </div>
-                      <vxe-table
-                        :data="getPagedTableData(pane)"
-                        border
-                        stripe
-                        :height="400"
-                        :column-config="{ resizable: true }"
-                        :scroll-y="{ enabled: true }"
-                        show-overflow
-                      >
-                        <vxe-column
-                          v-for="col in getTableColumns(pane)"
-                          :key="col.key"
-                          :field="col.key"
-                          :title="col.title"
-                          :min-width="col.minWidth || 120"
-                        />
-                      </vxe-table>
-                      <div class="mt-8px">
-                        <vxe-pager
-                          :current-page="pane.pagination?.currentPage || 1"
-                          :page-size="pane.pagination?.pageSize || 20"
-                          :total="pane.pagination?.total ?? getTableData(pane).length"
-                          :page-sizes="pageSizes"
-                          :layouts="['PrevPage','Number','NextPage','Sizes','Total']"
-                          @page-change="(params) => onPageChange(pane, params.currentPage, params.pageSize)"
-                        />
-                      </div>
-                    </div>
-                    <div v-else class="empty-result">
-                      <NEmpty description="查询无结果" />
-                    </div>
-                </NCard>
-                  
-                  <!-- 无结果时的占位 -->
-                  <div v-else class="no-result-placeholder">
-                    <NEmpty description="暂无查询结果" />
+                    </NSpace>
+                  </template>
+                  <!-- 查询统计信息隐藏：耗时/影响行数/返回行数 -->
+                  <div v-if="getTableData(pane).length > 0">
+                    <vxe-table
+                      :data="getPagedTableData(pane)"
+                      border
+                      stripe
+                      :height="400"
+                      :column-config="{ resizable: true }"
+                      :resizable-config="{ showDragTip: false }"
+                      :scroll-y="{ enabled: true }"
+                      show-overflow
+                    >
+                      <vxe-column
+                        v-for="col in getVisibleColumns(pane)"
+                        :key="col.key"
+                        :field="col.key"
+                        :title="col.title"
+                        :min-width="col.minWidth || 120"
+                      />
+                    </vxe-table>
                   </div>
+                  <div v-if="getTableData(pane).length > 0">
+                     <div class="mt-4 w-full flex items-center justify-between">
+                        <div class="flex items-center gap-12px text-12px">
+                           <SvgIcon icon="carbon:checkmark" class="text-16px text-#18a058" />
+                           <NText type="success">执行成功</NText>
+                           <NText>当前返回 [{{ getTableData(pane).length }}] 行</NText>
+                           <SvgIcon icon="carbon:time" class="ml-8px text-16px text-#2080f0" />
+                           <NText type="info">执行耗时 [{{ pane.result?.duration ?? '-' }}]</NText>
+                         </div>
+                        <NPagination
+                          v-model:page="pane.pagination!.currentPage"
+                          v-model:page-size="pane.pagination!.pageSize"
+                          :item-count="pane.pagination?.total ?? getTableData(pane).length"
+                          :page-sizes="pageSizes"
+                          show-size-picker
+                          size="small"
+                          :page-slot="9"
+                          @update:page="(p) => onPageChange(pane, p, pane.pagination!.pageSize)"
+                          @update:page-size="(s) => onPageChange(pane, pane.pagination!.currentPage, s)"
+                        />
+                      </div>
+                   </div>
+                  <div v-else>
+                    <NEmpty description="查询无结果" />
+                  </div>
+                </NCard>
+                <div v-else>
+                  <NEmpty description="暂无查询结果" />
                 </div>
               </div>
             </NTabPane>
           </NTabs>
-        </div>
-      </div>
-      </NCard>
-  </div>
+        </NLayoutContent>
+      </NLayout>
+    </NCard>
 </template>
 
 <style scoped>
-.das-edit-container {
-  height: 100%;
-}
-
-.edit-card {
-  height: calc(100vh - 200px);
-}
-
-.fold-container {
-  display: flex;
-  height: 100%;
-  overflow: hidden;
-}
-
-.left-panel {
-  height: 100%;
-  padding-right: 6px;
-  overflow: hidden;
-}
-
-.tree-container {
-  max-height: calc(100vh - 380px);
-  overflow-y: auto;
-  overflow-x: hidden;
-}
-
-.divider {
-  width: 6px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background-color: var(--n-border-color);
-  cursor: col-resize;
-  position: relative;
-  user-select: none;
-}
-
-.divider:hover {
-  background-color: var(--n-primary-color);
-}
-
-.main-panel {
-  flex: 1;
-  height: 100%;
-  padding-left: 6px;
-  overflow: auto;
-}
-
-/* CodeMirror container styles */
-.sql-editor.cm-container {
+/* 美化 SQL 编辑框：容器边框、圆角与内边距 */
+.code-editor-container {
   border: 1px solid var(--n-border-color);
-  border-radius: 6px;
-  min-height: 240px;
+  border-radius: 8px;
+  background-color: var(--n-color);
+  margin-bottom: 8px;
 }
-
-.sql-editor :deep(.cm-editor) {
+.code-editor-container :deep(.cm-editor) {
+  background-color: transparent;
   font-family: 'JetBrains Mono', 'Fira Code', Menlo, Monaco, 'Courier New', monospace;
-  font-size: 14px;
+  font-size: 13px;
 }
-
-.sql-editor :deep(.cm-scroller) {
-  min-height: 240px;
+.code-editor-container :deep(.cm-scroller) {
+  min-height: 300px;
+  padding: 4px;
 }
-
-/* 行号与折叠样式 */
-.sql-editor :deep(.cm-gutters) {
+.code-editor-container :deep(.cm-gutters) {
   background-color: var(--n-color);
   border-right: 1px solid var(--n-border-color);
 }
-.sql-editor :deep(.cm-foldGutter .cm-gutterElement) {
-  cursor: pointer;
+.code-editor-container :deep(.cm-activeLine) {
+  background-color: rgba(0, 0, 0, 0.03);
+}
+/* 左侧 NTree 自定义节点样式 */
+:deep(.n-tree .n-tree-node) {
+  --das-tree-type-color: var(--primary-color);
+}
+:deep(.n-tree) {
+  /* 紧凑化节点前缀与内容之间的间距 */
+  --n-node-gap: 0px;
 }
 
-.response-card {
-  max-height: 150px;
-  overflow-y: auto;
-}
-
-.response-msg {
-  font-size: 12px;
-  line-height: 1.8;
-}
-
-.mt-8px { 
-  margin-top: 8px; 
-}
-
-.mt-12px { 
-  margin-top: 12px; 
-}
-
-.mb-12px { 
-  margin-bottom: 12px; 
-}
-
-.empty-result {
-  padding: 40px;
-  text-align: center;
-}
-
-.tab-pane-container {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-}
-
-.tab-content {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  overflow: hidden;
-}
-
-.editor-area {
-  flex: 0 0 auto;
-  min-height: 300px;
-  max-height: 50vh;
-  overflow-y: auto;
-}
-
-.result-area {
-  flex: 1;
-  min-height: 200px;
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-}
-
-.result-card {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-}
-
-.table-container {
-  flex: 1;
-  overflow: auto;
-  min-height: 300px;
-}
-
-.no-result-placeholder {
-  flex: 1;
-  display: flex;
+:deep(.das-tree-item) {
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
-  padding: 40px;
-  min-height: 200px;
-  height: 100%;
+  justify-content: space-between;
+  width: 100%;
+}
+/* 表节点：两行布局 */
+:deep(.das-tree-item-table) {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+:deep(.das-tree-item-meta-row) {
+  display: inline-flex;
+  width: 100%;
+  justify-content: flex-start;
+  gap: 8px;
+}
+:deep(.das-tree-item-left) {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+:deep(.das-tree-item-left > .iconify),
+:deep(.das-tree-item-left > svg) {
+  display: inline-block;
+  flex: 0 0 auto;
+  vertical-align: middle;
+}
+:deep(.das-tree-item-name) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+:deep(.das-tree-item-type),
+:deep(.das-tree-item-count) {
+  color: var(--das-tree-type-color);
+  font-size: 12px;
+  flex: 0 0 auto;
+  white-space: nowrap;
+  margin-right: 12px;
+}
+/* 覆盖：表节点的数量允许换行（正常渲染） */
+:deep(.das-tree-item-table .das-tree-item-count) {
+  white-space: normal;
+  margin-right: 0;
+}
+/* 新增：可点击的“列(数量)”视觉样式 */
+:deep(.das-tree-item-count-toggle) {
+  cursor: pointer;
+  user-select: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0px;
+  white-space: nowrap;
+}
+:deep(.das-tree-item-count-toggle > .iconify),
+:deep(.das-tree-item-count-toggle > svg) {
+  display: inline-block;
+  flex: 0 0 auto;
+  vertical-align: middle;
+}
+:deep(.n-tree-node:hover) .das-tree-item-type,
+:deep(.n-tree-node:hover) .das-tree-item-count {
+  filter: saturate(1.2);
+}
+/* 新增：加/减号开关图标样式 */
+:deep(.das-tree-switcher-icon) {
+  font-size: 14px;
+  line-height: 1;
+  vertical-align: middle;
+}
+/* 收紧展开图标与节点内容之间的间距 */
+:deep(.n-tree-node-switcher) {
+  margin-right: 0px !important;
+  transform: none !important;
+}
+/* 进一步收紧节点内容间距 */
+:deep(.n-tree-node-content) {
+  gap: 0px !important;
+  padding-left: 0px !important;
+  margin-left: 0px !important;
+}
+:deep(.n-tree-node-content__prefix) {
+  margin-right: 0px !important;
 }
 </style>

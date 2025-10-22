@@ -8,6 +8,8 @@ import App from './App.vue';
 import 'xe-utils';
 import VXETable from 'vxe-table';
 import 'vxe-table/lib/style.css';
+import VxeUI from 'vxe-pc-ui';
+import 'vxe-pc-ui/lib/style.css';
 
 async function setupApp() {
   setupLoading();
@@ -28,6 +30,7 @@ async function setupApp() {
 
   setupAppVersionNotification();
 
+  app.use(VxeUI);
   app.use(VXETable);
 
   app.mount('#app');
