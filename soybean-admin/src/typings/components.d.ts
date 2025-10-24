@@ -20,6 +20,8 @@ declare module 'vue' {
     IconAntDesignSettingOutlined: typeof import('~icons/ant-design/setting-outlined')['default']
     IconGridiconsFullscreen: typeof import('~icons/gridicons/fullscreen')['default']
     IconGridiconsFullscreenExit: typeof import('~icons/gridicons/fullscreen-exit')['default']
+    IconIcRoundRefresh: typeof import('~icons/ic/round-refresh')['default']
+    IconIcRoundSearch: typeof import('~icons/ic/round-search')['default']
     IconLocalBanner: typeof import('~icons/local/banner')['default']
     IconLocalLogo: typeof import('~icons/local/logo')['default']
     IconMdiArrowDownThin: typeof import('~icons/mdi/arrow-down-thin')['default']

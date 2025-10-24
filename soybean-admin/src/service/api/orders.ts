@@ -74,7 +74,7 @@ export function fetchCreateOrder(data: Api.Orders.CreateOrderRequest) {
  */
 export function fetchOrdersList(params?: Record<string, any>) {
   return request<Api.Orders.OrdersList>({
-    url: '/api/v1/orders',
+    url: '/api/v1/orders/list',
     method: 'get',
     params
   });

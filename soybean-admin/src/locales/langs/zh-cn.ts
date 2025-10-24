@@ -176,6 +176,8 @@ const local: App.I18n.Schema = {
     das_favorite: '收藏SQL',
     das_history: '历史查询',
     das_edit: 'SQL查询',
+    'das_orders-list': '工单列表',
+    das_orders_list: '工单列表',
     das_orders: '提交工单',
     das_orders_ddl: 'DDL工单',
     das_orders_dml: 'DML工单',

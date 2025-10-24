@@ -24,6 +24,7 @@ export const views: Record<LastLevelRouteKey, RouteComponent | (() => Promise<Ro
   das_favorite: () => import("@/views/das/favorite/index.vue"),
   das_history: () => import("@/views/das/history/index.vue"),
   das: () => import("@/views/das/index.vue"),
+  "das_orders-list": () => import("@/views/das/orders-list/index.vue"),
   das_orders_commit: () => import("@/views/das/orders/commit/index.vue"),
   das_orders_ddl: () => import("@/views/das/orders/ddl/index.vue"),
   das_orders_dml: () => import("@/views/das/orders/dml/index.vue"),

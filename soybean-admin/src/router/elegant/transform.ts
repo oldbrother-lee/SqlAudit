@@ -175,6 +175,7 @@ const routeMap: RouteMap = {
   "das_orders_ddl": "/das/orders/ddl",
   "das_orders_dml": "/das/orders/dml",
   "das_orders_export": "/das/orders/export",
+  "das_orders-list": "/das/orders-list",
   "home": "/home",
   "iframe-page": "/iframe-page/:url",
   "login": "/login/:module(pwd-login|code-login|register|reset-pwd|bind-wechat)?"

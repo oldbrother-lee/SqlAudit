@@ -146,6 +146,17 @@ export const generatedRoutes: GeneratedRoute[] = [
             }
           }
         ]
+      },
+      {
+        name: 'das_orders-list',
+        path: '/das/orders-list',
+        component: 'view.das_orders-list',
+        meta: {
+          title: 'das_orders-list',
+          i18nKey: 'route.das_orders-list',
+          icon: 'mdi:format-list-bulleted',
+          order: 2
+        }
       }
     ]
   },
