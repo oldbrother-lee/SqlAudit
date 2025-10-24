@@ -22,9 +22,9 @@ export function setupElegantRouter() {
       return routePath;
     },
     onRouteMetaGen(routeName) {
-      const key = routeName as RouteKey;
+      const key = routeName as string;
 
-      const constantRoutes: RouteKey[] = ['login', '403', '404', '500'];
+      const constantRoutes = ['login', '403', '404', '500'];
 
       const meta: Partial<RouteMeta> = {
         title: key,
@@ -42,8 +42,29 @@ export function setupElegantRouter() {
       }
 
       if (key === 'das') {
+        // 顶层“数据库服务”显示为菜单，并设置图标与顺序
         meta.icon = 'mdi:database-search';
         meta.order = 2;
+      }
+
+      // 隐藏不需要展示的 DAS 子菜单
+      if (key === 'das_favorite' || key === 'das_history' || key === 'das_orders_commit') {
+        meta.hideInMenu = true;
+      }
+
+      // 为工单类型设置排序，确保菜单顺序为 DDL/DML/导出
+      if (key === 'das_orders') {
+        meta.order = 3;
+      }
+      // 旧的 commit_* 排序保留无影响，但新增直接子路由排序
+      if (key === 'das_orders_ddl') {
+        meta.order = 1;
+      }
+      if (key === 'das_orders_dml') {
+        meta.order = 2;
+      }
+      if (key === 'das_orders_export') {
+        meta.order = 3;
       }
 
       return meta;

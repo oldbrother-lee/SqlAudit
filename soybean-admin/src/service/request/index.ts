@@ -48,7 +48,8 @@ export const request = createFlatRequest<App.Service.Response, RequestInstanceSt
         handleLogout();
         window.removeEventListener('beforeunload', handleLogout);
 
-        request.state.errMsgStack = request.state.errMsgStack.filter(msg => msg !== response.data.msg);
+        const backendMsg = (((response.data as any)?.msg ?? (response.data as any)?.message) || '') as string;
+        request.state.errMsgStack = request.state.errMsgStack.filter(msg => msg !== backendMsg);
       }
 
       // when the backend response code is in `logoutCodes`, it means the user will be logged out and redirected to login page
@@ -60,15 +61,16 @@ export const request = createFlatRequest<App.Service.Response, RequestInstanceSt
 
       // when the backend response code is in `modalLogoutCodes`, it means the user will be logged out by displaying a modal
       const modalLogoutCodes = import.meta.env.VITE_SERVICE_MODAL_LOGOUT_CODES?.split(',') || [];
-      if (modalLogoutCodes.includes(responseCode) && !request.state.errMsgStack?.includes(response.data.msg)) {
-        request.state.errMsgStack = [...(request.state.errMsgStack || []), response.data.msg];
+      const backendMsg = (((response.data as any)?.msg ?? (response.data as any)?.message) || '') as string;
+      if (modalLogoutCodes.includes(responseCode) && !request.state.errMsgStack?.includes(backendMsg)) {
+        request.state.errMsgStack = [...(request.state.errMsgStack || []), backendMsg];
 
         // prevent the user from refreshing the page
         window.addEventListener('beforeunload', handleLogout);
 
         window.$dialog?.error({
           title: $t('common.error'),
-          content: response.data.msg,
+          content: backendMsg,
           positiveText: $t('common.confirm'),
           maskClosable: false,
           closeOnEsc: false,
@@ -83,8 +85,7 @@ export const request = createFlatRequest<App.Service.Response, RequestInstanceSt
         return null;
       }
 
-      // when the backend response code is in `expiredTokenCodes`, it means the token is expired, and refresh token
-      // the api `refreshToken` can not return error code in `expiredTokenCodes`, otherwise it will be a dead loop, should return `logoutCodes` or `modalLogoutCodes`
+      // when the token is expired, refresh token and retry request
       const expiredTokenCodes = import.meta.env.VITE_SERVICE_EXPIRED_TOKEN_CODES?.split(',') || [];
       if (expiredTokenCodes.includes(responseCode)) {
         const success = await handleExpiredRequest(request.state);
@@ -109,8 +110,9 @@ export const request = createFlatRequest<App.Service.Response, RequestInstanceSt
 
       // get backend error message and code
       if (error.code === BACKEND_ERROR_CODE) {
-        message = error.response?.data?.msg || message;
-        backendErrorCode = String(error.response?.data?.code || '');
+        const respData: any = error.response?.data || {};
+        message = respData.msg ?? respData.message ?? message;
+        backendErrorCode = String(respData.code || '');
       }
 
       // the error message is displayed in the modal
@@ -130,18 +132,14 @@ export const request = createFlatRequest<App.Service.Response, RequestInstanceSt
   }
 );
 
-export const demoRequest = createRequest<App.Service.DemoResponse>(
+export const demoRequest = createRequest<App.Service.DemoResponse, RequestInstanceState>(
   {
     baseURL: otherBaseURL.demo
   },
   {
     async onRequest(config) {
-      const { headers } = config;
-
-      // set token
-      const token = localStg.get('token');
-      const Authorization = token ? `JWT ${token}` : null;
-      Object.assign(headers, { Authorization });
+      const Authorization = getAuthorization();
+      Object.assign(config.headers, { Authorization });
 
       return config;
     },

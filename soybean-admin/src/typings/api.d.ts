@@ -273,9 +273,16 @@ declare namespace Api {
     }
 
     interface SyntaxCheckResult {
-      isValid: boolean;
-      errors: string[];
-      warnings: string[];
+      data: {
+        summary: string[] | null;
+        level: string;
+        affected_rows: number;
+        type: string;
+        finger_id: string;
+        query: string;
+      }[];
+      /** 0: 通过, 1: 失败 */
+      status: number;
     }
 
     interface CreateOrderRequest {

@@ -21,10 +21,14 @@ declare module "@elegant-router/types" {
     "404": "/404";
     "500": "/500";
     "das": "/das";
-    "das_modules": "/das/modules";
-    "das_modules_edit": "/das/modules/edit";
-    "das_modules_favorite": "/das/modules/favorite";
-    "das_modules_history": "/das/modules/history";
+    "das_edit": "/das/edit";
+    "das_favorite": "/das/favorite";
+    "das_history": "/das/history";
+    "das_orders": "/das/orders";
+    "das_orders_commit": "/das/orders/commit";
+    "das_orders_ddl": "/das/orders/ddl";
+    "das_orders_dml": "/das/orders/dml";
+    "das_orders_export": "/das/orders/export";
     "home": "/home";
     "iframe-page": "/iframe-page/:url";
     "login": "/login/:module(pwd-login|code-login|register|reset-pwd|bind-wechat)?";
@@ -87,10 +91,14 @@ declare module "@elegant-router/types" {
     | "500"
     | "iframe-page"
     | "login"
+    | "das_edit"
+    | "das_favorite"
+    | "das_history"
     | "das"
-    | "das_modules_edit"
-    | "das_modules_favorite"
-    | "das_modules_history"
+    | "das_orders_commit"
+    | "das_orders_ddl"
+    | "das_orders_dml"
+    | "das_orders_export"
     | "home"
   >;
 

@@ -419,10 +419,6 @@ export default {
         })
         return
       }
-      this.$notification.info({
-        message: '提示',
-        description: '开始执行语法检查',
-      })
       const data = {
         db_type: this.form.getFieldValue('db_type'),
         sql_type: this.sqlType,

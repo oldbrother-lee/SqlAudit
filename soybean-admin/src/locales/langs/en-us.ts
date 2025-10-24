@@ -171,7 +171,19 @@ const local: App.I18n.Schema = {
     das_modules: 'DAS Modules',
     das_modules_edit: 'SQL Editor',
     das_modules_favorite: 'Favorite SQL',
-    das_modules_history: 'Query History'
+    das_modules_history: 'Query History',
+    sql: 'SQL Query',
+    das_favorite: 'Favorite SQL',
+    das_history: 'Query History',
+    das_edit: 'SQL Query',
+    das_orders: 'Orders',
+    das_orders_ddl: 'DDL Order',
+    das_orders_dml: 'DML Order',
+    das_orders_export: 'Export Order',
+    das_orders_commit: 'Commit Order',
+    das_orders_commit_ddl: 'DDL Order',
+    das_orders_commit_dml: 'DML Order',
+    das_orders_commit_export: 'Export Order'
   },
   page: {
     login: {

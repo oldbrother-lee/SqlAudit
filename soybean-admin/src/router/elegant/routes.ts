@@ -51,36 +51,101 @@ export const generatedRoutes: GeneratedRoute[] = [
     },
     children: [
       {
-        name: 'das_modules_edit',
-        path: '/das/modules/edit',
-        component: 'view.das_modules_edit',
+        name: 'das_edit',
+        path: '/das/edit',
+        component: 'view.das_edit',
         meta: {
-          title: 'das_modules_edit',
-          i18nKey: 'route.das_modules_edit',
+          title: 'das_edit',
+          i18nKey: 'route.das_edit',
           icon: 'mdi:database-search'
         }
       },
       {
-        name: 'das_modules_favorite',
-        path: '/das/modules/favorite',
-        component: 'view.das_modules_favorite',
+        name: 'das_favorite',
+        path: '/das/favorite',
+        component: 'view.das_favorite',
         meta: {
-          title: 'das_modules_favorite',
-          i18nKey: 'route.das_modules_favorite',
-          hideInMenu: true,
-          activeMenu: 'das_modules_edit'
+          title: 'das_favorite',
+          i18nKey: 'route.das_favorite',
+          hideInMenu: true
         }
       },
       {
-        name: 'das_modules_history',
-        path: '/das/modules/history',
-        component: 'view.das_modules_history',
+        name: 'das_history',
+        path: '/das/history',
+        component: 'view.das_history',
         meta: {
-          title: 'das_modules_history',
-          i18nKey: 'route.das_modules_history',
-          hideInMenu: true,
-          activeMenu: 'das_modules_edit'
+          title: 'das_history',
+          i18nKey: 'route.das_history',
+          hideInMenu: true
         }
+      },
+      {
+        name: 'das_orders',
+        path: '/das/orders',
+        meta: {
+          title: 'das_orders',
+          i18nKey: 'route.das_orders',
+          icon: 'mdi:file-document-edit',
+          order: 3
+        },
+        children: [
+          {
+            name: 'das_orders_commit',
+            path: '/das/orders/commit',
+            component: 'view.das_orders_commit',
+            meta: {
+              title: 'das_orders_commit',
+              i18nKey: 'route.das_orders_commit',
+              hideInMenu: true
+            },
+            children: [
+              {
+                name: 'das_orders_commit_export',
+                path: '/das/orders/commit/export',
+                component: 'view.das_orders_commit_export',
+                meta: {
+                  title: 'das_orders_commit_export',
+                  i18nKey: 'route.das_orders_commit_export',
+                  order: 3
+                }
+              }
+            ]
+          },
+          {
+            name: 'das_orders_ddl',
+            path: '/das/orders/ddl',
+            component: 'view.das_orders_ddl',
+            meta: {
+              title: 'das_orders_ddl',
+              i18nKey: 'route.das_orders_ddl',
+              icon: 'mdi:database-cog',
+              order: 1
+            }
+          },
+          {
+            name: 'das_orders_dml',
+            path: '/das/orders/dml',
+            component: 'view.das_orders_dml',
+            meta: {
+              title: 'das_orders_dml',
+              i18nKey: 'route.das_orders_dml',
+              icon: 'mdi:database-edit',
+              order: 2
+            }
+          },
+          {
+            name: 'das_orders_export',
+            path: '/das/orders/export',
+            component: 'view.das_orders_export',
+            meta: {
+              title: 'das_orders_export',
+              i18nKey: 'route.das_orders_export',
+              icon: 'mdi:database-export',
+              order: 3
+            }
+          }
+        ]
       }
     ]
   },

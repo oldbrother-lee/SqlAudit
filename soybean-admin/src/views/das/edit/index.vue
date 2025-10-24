@@ -43,8 +43,8 @@ const columnsGroupExpanded = ref<Set<string | number>>(new Set());
 
 // 路由跳转：收藏SQL、历史查询
 const router = useRouter();
-const gotoFavorite = () => router.push({ name: 'das_modules_favorite' });
-const gotoHistory = () => router.push({ name: 'das_modules_history' });
+const gotoFavorite = () => router.push({ name: 'das_favorite' });
+const gotoHistory = () => router.push({ name: 'das_history' });
 
 // 过滤后的树数据
 const filteredTreeData = computed(() => {

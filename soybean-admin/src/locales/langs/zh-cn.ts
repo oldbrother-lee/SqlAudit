@@ -171,7 +171,19 @@ const local: App.I18n.Schema = {
     das_modules: 'DAS模块',
     das_modules_edit: 'SQL查询',
     das_modules_favorite: '收藏SQL',
-    das_modules_history: '历史查询'
+    das_modules_history: '历史查询',
+    sql: 'SQL查询',
+    das_favorite: '收藏SQL',
+    das_history: '历史查询',
+    das_edit: 'SQL查询',
+    das_orders: '提交工单',
+    das_orders_ddl: 'DDL工单',
+    das_orders_dml: 'DML工单',
+    das_orders_export: '导出工单',
+    das_orders_commit: '提交工单',
+    das_orders_commit_ddl: 'DDL工单',
+    das_orders_commit_dml: 'DML工单',
+    das_orders_commit_export: '导出工单'
   },
   page: {
     login: {

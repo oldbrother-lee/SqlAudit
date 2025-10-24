@@ -51,9 +51,10 @@ export function fetchOrdersUsers(params?: Record<string, any>) {
  */
 export function fetchSyntaxCheck(data: Api.Orders.SyntaxCheckRequest) {
   return request<Api.Orders.SyntaxCheckResult>({
-    url: '/api/v1/orders/syntax/check',
+    url: '/api/v1/orders/syntax-inspect',
     method: 'post',
-    data
+    data,
+    timeout: 10 * 60 * 1000
   });
 }
 
@@ -62,7 +63,7 @@ export function fetchSyntaxCheck(data: Api.Orders.SyntaxCheckRequest) {
  */
 export function fetchCreateOrder(data: Api.Orders.CreateOrderRequest) {
   return request<Api.Orders.Order>({
-    url: '/api/v1/orders',
+    url: '/api/v1/orders/commit',
     method: 'post',
     data
   });
