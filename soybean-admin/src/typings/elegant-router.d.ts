@@ -29,6 +29,7 @@ declare module "@elegant-router/types" {
     "das_orders_ddl": "/das/orders/ddl";
     "das_orders_dml": "/das/orders/dml";
     "das_orders_export": "/das/orders/export";
+    "das_orders-detail": "/das/orders-detail/:id";
     "das_orders-list": "/das/orders-list";
     "home": "/home";
     "iframe-page": "/iframe-page/:url";
@@ -96,6 +97,7 @@ declare module "@elegant-router/types" {
     | "das_favorite"
     | "das_history"
     | "das"
+    | "das_orders-detail"
     | "das_orders-list"
     | "das_orders_commit"
     | "das_orders_ddl"

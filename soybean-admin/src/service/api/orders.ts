@@ -1,4 +1,4 @@
-import { request } from '../request';
+import { request, requestRaw } from '../request';
 
 /** Orders API */
 
@@ -83,11 +83,10 @@ export function fetchOrdersList(params?: Record<string, any>) {
 /**
  * Get order detail
  */
-export function fetchOrderDetail(params?: Record<string, any>) {
+export function fetchOrderDetail(id: string) {
   return request<Api.Orders.OrderDetail>({
-    url: '/api/v1/orders/detail',
-    method: 'get',
-    params
+    url: `/api/v1/orders/detail/${id}`,
+    method: 'get'
   });
 }
 
@@ -96,7 +95,7 @@ export function fetchOrderDetail(params?: Record<string, any>) {
  */
 export function fetchOpLogs(params?: Record<string, any>) {
   return request<Api.Orders.OpLog[]>({
-    url: '/api/v1/orders/oplogs',
+    url: '/api/v1/orders/detail/oplogs',
     method: 'get',
     params
   });
@@ -107,8 +106,8 @@ export function fetchOpLogs(params?: Record<string, any>) {
  */
 export function fetchApproveOrder(data: Api.Orders.ApproveOrderRequest) {
   return request({
-    url: '/api/v1/orders/approve',
-    method: 'post',
+    url: '/api/v1/orders/operate/approve',
+    method: 'put',
     data
   });
 }
@@ -118,8 +117,8 @@ export function fetchApproveOrder(data: Api.Orders.ApproveOrderRequest) {
  */
 export function fetchFeedbackOrder(data: Api.Orders.FeedbackOrderRequest) {
   return request({
-    url: '/api/v1/orders/feedback',
-    method: 'post',
+    url: '/api/v1/orders/operate/feedback',
+    method: 'put',
     data
   });
 }
@@ -129,8 +128,8 @@ export function fetchFeedbackOrder(data: Api.Orders.FeedbackOrderRequest) {
  */
 export function fetchReviewOrder(data: Api.Orders.ReviewOrderRequest) {
   return request({
-    url: '/api/v1/orders/review',
-    method: 'post',
+    url: '/api/v1/orders/operate/review',
+    method: 'put',
     data
   });
 }
@@ -140,8 +139,8 @@ export function fetchReviewOrder(data: Api.Orders.ReviewOrderRequest) {
  */
 export function fetchCloseOrder(data: Api.Orders.CloseOrderRequest) {
   return request({
-    url: '/api/v1/orders/close',
-    method: 'post',
+    url: '/api/v1/orders/operate/close',
+    method: 'put',
     data
   });
 }
@@ -162,7 +161,7 @@ export function fetchHookOrder(data: Api.Orders.HookOrderRequest) {
  */
 export function fetchGenerateTasks(data: Api.Orders.GenerateTasksRequest) {
   return request<Api.Orders.Task[]>({
-    url: '/api/v1/orders/tasks/generate',
+    url: '/api/v1/orders/generate-tasks',
     method: 'post',
     data
   });
@@ -171,11 +170,10 @@ export function fetchGenerateTasks(data: Api.Orders.GenerateTasksRequest) {
 /**
  * Get tasks
  */
-export function fetchTasks(params?: Record<string, any>) {
+export function fetchTasks(params: { order_id: string }) {
   return request<Api.Orders.Task[]>({
-    url: '/api/v1/orders/tasks',
-    method: 'get',
-    params
+    url: `/api/v1/orders/tasks/${params.order_id}`,
+    method: 'get'
   });
 }
 
@@ -195,7 +193,7 @@ export function fetchPreviewTasks(params?: Record<string, any>) {
  */
 export function fetchExecuteSingleTask(data: Api.Orders.ExecuteTaskRequest) {
   return request<Api.Orders.TaskResult>({
-    url: '/api/v1/orders/tasks/execute/single',
+    url: '/api/v1/orders/tasks/execute-single',
     method: 'post',
     data
   });
@@ -205,8 +203,8 @@ export function fetchExecuteSingleTask(data: Api.Orders.ExecuteTaskRequest) {
  * Execute all tasks
  */
 export function fetchExecuteAllTasks(data: Api.Orders.ExecuteAllTasksRequest) {
-  return request<Api.Orders.TaskResult>({
-    url: '/api/v1/orders/tasks/execute/all',
+  return requestRaw<any>({
+    url: '/api/v1/orders/tasks/execute-all',
     method: 'post',
     data
   });
@@ -215,11 +213,10 @@ export function fetchExecuteAllTasks(data: Api.Orders.ExecuteAllTasksRequest) {
 /**
  * Download export file
  */
-export function fetchDownloadExportFile(params?: Record<string, any>) {
+export function fetchDownloadExportFile(taskId: string | number) {
   return request<Blob>({
-    url: '/api/v1/orders/download',
+    url: `/api/v1/orders/download/exportfile/${taskId}`,
     method: 'get',
-    params,
     responseType: 'blob'
   });
 }

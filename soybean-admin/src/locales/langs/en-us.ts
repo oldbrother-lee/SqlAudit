@@ -177,6 +177,7 @@ const local: App.I18n.Schema = {
     das_history: 'Query History',
     das_edit: 'SQL Query',
     'das_orders-list': 'Order List',
+    'das_orders-detail': 'Order Detail',
     das_orders: 'Orders',
     das_orders_ddl: 'DDL Order',
     das_orders_dml: 'DML Order',

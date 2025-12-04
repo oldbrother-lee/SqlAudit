@@ -148,6 +148,17 @@ export const generatedRoutes: GeneratedRoute[] = [
         ]
       },
       {
+        name: 'das_orders-detail',
+        path: '/das/orders-detail/:id',
+        component: 'view.das_orders-detail',
+        meta: {
+          title: 'das_orders-detail',
+          i18nKey: 'route.das_orders-detail',
+          hideInMenu: true,
+          activeMenu: 'das_orders-list'
+        }
+      },
+      {
         name: 'das_orders-list',
         path: '/das/orders-list',
         component: 'view.das_orders-list',

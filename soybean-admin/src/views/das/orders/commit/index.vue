@@ -337,7 +337,7 @@ async function submitOrder() {
     // 此时我们认为请求成功，因为没有抛出异常
     if (res === null || res?.response.data.code === '0000') {
       message.success('工单提交成功');
-      router.push('/das/edit');
+      router.push('/das/orders-list');
     } else {
       message.warning(res?.message || '工单提交失败');
     }

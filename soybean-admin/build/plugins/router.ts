@@ -19,6 +19,10 @@ export function setupElegantRouter() {
         return `/login/:module(${moduleReg})?`;
       }
 
+      if (key === 'das_orders-detail') {
+        return '/das/orders-detail/:id';
+      }
+
       return routePath;
     },
     onRouteMetaGen(routeName) {
@@ -33,6 +37,11 @@ export function setupElegantRouter() {
 
       if (constantRoutes.includes(key)) {
         meta.constant = true;
+      }
+      
+      if (key === 'das_orders-detail') {
+        meta.hideInMenu = true;
+        meta.activeMenu = 'das_orders-list';
       }
 
       // Add icon and order for specific routes
