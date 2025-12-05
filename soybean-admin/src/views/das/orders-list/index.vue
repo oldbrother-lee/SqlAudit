@@ -1,80 +1,3 @@
-<template>
-  <div class="min-h-500px flex-col-stretch gap-16px overflow-hidden lt-sm:overflow-auto">
-    <NCard title="工单列表" :bordered="false" size="small" class="sm:flex-1-hidden card-wrapper">
-      <template #header-extra>
-        <div class="flex-y-center gap-12px">
-          <NSwitch v-model:value="onlyMyOrders" @update:value="handleMyOrdersChange">
-            <template #checked>我的工单</template>
-            <template #unchecked>所有工单</template>
-          </NSwitch>
-          <NButton type="primary" ghost @click="handleRefresh">
-            <template #icon>
-              <icon-ic-round-refresh class="text-icon" />
-            </template>
-            刷新
-          </NButton>
-        </div>
-      </template>
-      
-      <!-- 搜索表单 -->
-      <div class="mb-12px">
-        <NForm ref="queryFormRef" inline :model="queryParams" label-placement="left">
-          <NFormItem label="环境">
-            <NSelect
-              v-model:value="queryParams.environment"
-              placeholder="请选择环境"
-              clearable
-              class="w-200px"
-              :options="environmentOptions"
-            />
-          </NFormItem>
-          <NFormItem label="进度">
-            <NSelect
-              v-model:value="queryParams.progress"
-              placeholder="请选择进度"
-              clearable
-              class="w-200px"
-              :options="progressOptions"
-            />
-          </NFormItem>
-          <NFormItem label="工单标题">
-            <NInput
-              v-model:value="queryParams.search"
-              placeholder="输入要查询工单标题"
-              clearable
-              class="w-300px"
-              @keydown.enter="handleSearch"
-            />
-          </NFormItem>
-          <NFormItem>
-            <NButton type="primary" @click="handleSearch">
-              <template #icon>
-                <icon-ic-round-search class="text-icon" />
-              </template>
-              查询
-            </NButton>
-          </NFormItem>
-        </NForm>
-      </div>
-
-      <!-- 数据表格 -->
-      <NDataTable
-        :columns="columns"
-        :data="data"
-        :loading="loading"
-        :pagination="pagination"
-        :row-key="rowKey"
-        :row-props="rowProps"
-        flex-height
-        remote
-        class="sm:h-full"
-        @update:page="handlePageChange"
-        @update:page-size="handlePageSizeChange"
-      />
-    </NCard>
-  </div>
-</template>
-
 <script setup lang="ts">
 import { computed, h, onMounted, onUnmounted, reactive, ref } from 'vue';
 import type { Ref } from 'vue';
@@ -155,13 +78,13 @@ const filteredData = computed(() => {
 // 工具函数
 const getProgressTagColor = (status: string) => {
   const colorMap: Record<string, any> = {
-    '待审核': 'warning',
-    '审核中': 'info', 
-    '已通过': 'success',
-    '已拒绝': 'error',
-    '执行中': 'info',
-    '已完成': 'success',
-    '已关闭': 'default'
+    待审核: 'warning',
+    审核中: 'info',
+    已通过: 'success',
+    已拒绝: 'error',
+    执行中: 'info',
+    已完成: 'success',
+    已关闭: 'default'
   };
   return colorMap[status] || 'default';
 };
@@ -172,7 +95,7 @@ const columns: DataTableColumns<any> = [
     key: 'progress',
     title: '进度',
     width: 100,
-    render: (row) => {
+    render: row => {
       const color = getProgressTagColor(row.progress);
       return h(NTag, { type: color }, () => row.progress);
     }
@@ -184,7 +107,7 @@ const columns: DataTableColumns<any> = [
     ellipsis: {
       tooltip: true
     },
-    render: (row) => {
+    render: row => {
       if (!row.order_title) return '';
       const parts = row.order_title.split('_');
       if (parts.length > 1) {
@@ -250,12 +173,12 @@ async function getOrdersList() {
       search: queryParams.search,
       onlyMyOrders: onlyMyOrders.value
     };
-    
+
     const response = await fetchOrdersList(params);
-    
+
     if (response.data) {
       // 由于API返回的是直接的数组而不是分页对象，需要进行类型转换
-      const ordersList = (response.data as unknown as Api.Orders.Order[]);
+      const ordersList = response.data as unknown as Api.Orders.Order[];
       data.value = ordersList || [];
       total.value = ordersList ? ordersList.length : 0;
       pagination.itemCount = total.value;
@@ -315,7 +238,7 @@ let refreshTimer: NodeJS.Timeout | null = null;
 
 onMounted(() => {
   getOrdersList();
-  
+
   // 每30秒刷新一次
   refreshTimer = setInterval(() => {
     getOrdersList();
@@ -328,6 +251,83 @@ onUnmounted(() => {
   }
 });
 </script>
+
+<template>
+  <div class="min-h-500px flex-col-stretch gap-16px overflow-hidden lt-sm:overflow-auto">
+    <NCard title="工单列表" :bordered="false" size="small" class="card-wrapper sm:flex-1-hidden">
+      <template #header-extra>
+        <div class="flex-y-center gap-12px">
+          <NSwitch v-model:value="onlyMyOrders" @update:value="handleMyOrdersChange">
+            <template #checked>我的工单</template>
+            <template #unchecked>所有工单</template>
+          </NSwitch>
+          <NButton type="primary" ghost @click="handleRefresh">
+            <template #icon>
+              <icon-ic-round-refresh class="text-icon" />
+            </template>
+            刷新
+          </NButton>
+        </div>
+      </template>
+
+      <!-- 搜索表单 -->
+      <div class="mb-12px">
+        <NForm ref="queryFormRef" inline :model="queryParams" label-placement="left">
+          <NFormItem label="环境">
+            <NSelect
+              v-model:value="queryParams.environment"
+              placeholder="请选择环境"
+              clearable
+              class="w-200px"
+              :options="environmentOptions"
+            />
+          </NFormItem>
+          <NFormItem label="进度">
+            <NSelect
+              v-model:value="queryParams.progress"
+              placeholder="请选择进度"
+              clearable
+              class="w-200px"
+              :options="progressOptions"
+            />
+          </NFormItem>
+          <NFormItem label="工单标题">
+            <NInput
+              v-model:value="queryParams.search"
+              placeholder="输入要查询工单标题"
+              clearable
+              class="w-300px"
+              @keydown.enter="handleSearch"
+            />
+          </NFormItem>
+          <NFormItem>
+            <NButton type="primary" @click="handleSearch">
+              <template #icon>
+                <icon-ic-round-search class="text-icon" />
+              </template>
+              查询
+            </NButton>
+          </NFormItem>
+        </NForm>
+      </div>
+
+      <!-- 数据表格 -->
+      <NDataTable
+        :columns="columns"
+        :data="data"
+        :loading="loading"
+        :pagination="pagination"
+        :row-key="rowKey"
+        :row-props="rowProps"
+        flex-height
+        remote
+        class="sm:h-full"
+        @update:page="handlePageChange"
+        @update:page-size="handlePageSizeChange"
+      />
+    </NCard>
+  </div>
+</template>
 
 <style scoped>
 .card-wrapper {

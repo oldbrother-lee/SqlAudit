@@ -19,12 +19,13 @@ import { useRouter } from 'vue-router';
 const { t } = useI18n();
 
 // 响应式数据
-const asideWidth = ref(450);
+const showLeftPanel = ref(true);
 const selectedSchema = ref<any>({});
 const activeKey = ref('1');
 const newTabIndex = ref(2);
 const tabCompletion = ref<any>({});
-// 移除splitSize，改用简单布局
+// 改用网格布局管理左右区域占比
+const rightSpan = computed(() => (showLeftPanel.value ? 17 : 24));
 
 // 左侧数据
 const schemas = ref<any[]>([]);
@@ -202,6 +203,11 @@ const tabIndex = computed(() => {
 });
 
 const currentPane = computed<EditorPane>(() => panes.value[tabIndex.value] || panes.value[0]);
+const currentSchemaLabel = computed(() => {
+  if (!selectedSchema.value?.schema) return '未选择库';
+  const type = selectedSchema.value?.db_type || 'mysql';
+  return `${selectedSchema.value.schema} · ${type}`;
+});
 
 // CodeMirror: per-pane editor实例及可重配置主题
 const editorViews = ref<Record<string, EditorView | null>>({});
@@ -278,10 +284,16 @@ function createEditor(pane: EditorPane, el: HTMLElement) {
 
 function setEditorRef(pane: EditorPane, el: HTMLElement | null) {
   if (!el) return;
-  // 仅首次挂载时创建，避免由于 pane.sql 更新导致的重复渲染触发
-  if (!editorViews.value[pane.key]) {
-    createEditor(pane, el);
+  const view = editorViews.value[pane.key];
+  // 若已存在视图但被卸载，需要重新挂载到当前容器
+  if (view) {
+    if (view.dom.parentElement !== el) {
+      el.innerHTML = '';
+      el.appendChild(view.dom);
+    }
+    return;
   }
+  createEditor(pane, el);
 }
 
 // keep editor in sync when sql changes externally (e.g., dblclick fill)
@@ -509,7 +521,7 @@ const renderTree = (grants: any, data: any[]) => {
 
 // 右侧编辑器方法
 const foldLeft = () => {
-  asideWidth.value = asideWidth.value === 0 ? 450 : 0;
+  showLeftPanel.value = !showLeftPanel.value;
 };
 
 const onEdit = (targetKey: string, action: 'add' | 'remove') => {
@@ -539,6 +551,15 @@ const add = () => {
 };
 
 const remove = (targetKey: string) => {
+  // 销毁对应的编辑器实例，避免残留引用导致重新挂载失败
+  const view = editorViews.value[targetKey];
+  if (view) {
+    view.destroy();
+    delete editorViews.value[targetKey];
+    delete themeCompartments.value[targetKey];
+    delete languageCompartments.value[targetKey];
+  }
+
   let activeKeyValue = activeKey.value;
   let lastIndex = -1;
   
@@ -969,206 +990,280 @@ onUnmounted(() => {
 </script>
 
 <template>
-    <NCard size="small" :content-style="{ padding: '0px' }">
-      <NLayout has-sider style="height: calc(100vh - 160px)">
-        <NLayoutSider :collapsed="asideWidth === 0" :collapsed-width="0" :width="asideWidth" native-scrollbar>
-          <NCard size="small" title="数据库列表">
-            <NSpace vertical :size="8">
-              <NGrid cols="24" x-gap="8" y-gap="4">
-                <NGi span="20">
-                  <NSelect
-                    v-model:value="bindTitle"
-                    :options="schemas.map((s: any) => ({ 
-                      label: `${s.remark || s.instanceName || s.hostname}:${s.schema}`,
-                      value: `${s.instance_id}#${s.schema}#${s.db_type}`
-                    }))"
-                    filterable
-                    clearable
-                    placeholder="请选择库名..."
-                    @update:value="getTables"
-                  />
-                </NGi>
-                <NGi span="4">
-                  <NSpace :size="8" justify="end" :wrap="false">
-                    <NTooltip trigger="hover" placement="top" :show-arrow="false">
-                      <template #trigger>
-                        <NButton quaternary circle size="small" :loading="refreshLoading" @click="refreshSchemas">
-                          <template #icon>
-                            <SvgIcon icon="carbon:renew" />
-                          </template>
-                        </NButton>
-                      </template>
-                      刷新数据库列表
-                    </NTooltip>
-                    <NTooltip trigger="hover" placement="top" :show-arrow="false">
-                      <template #trigger>
-                        <NButton quaternary circle size="small" @click="foldLeft">
-                          <template #icon>
-                            <SvgIcon :icon="asideWidth === 0 ? 'line-md:menu-fold-right' : 'line-md:menu-fold-left'" />
-                          </template>
-                        </NButton>
-                      </template>
-                      折叠/展开左侧
-                    </NTooltip>
-                  </NSpace>
-                </NGi>
-              </NGrid>
-              <NGrid v-if="showSearch" cols="24" x-gap="8" y-gap="4">
-                <NGi span="24">
-                  <NInput 
-                    v-model:value="leftTableSearch" 
-                    clearable 
-                    placeholder="输入要搜索的表名..."
-                    @keyup.enter="onSearch(leftTableSearch)"
-                  />
-                </NGi>
-              </NGrid>
-              <NText depth="3">搜索不到需要的表？试试右侧的刷新按钮。</NText>
-              <NScrollbar style="max-height: calc(100vh - 300px)">
-                <NSpin :show="treeLoading">
-                  <NTree
-                    :data="filteredTreeData"
-                    block-line
-                    show-line
-                    :virtual-scroll="true"
-                    :render-label="renderTreeLabel"
-                    :render-switcher-icon="renderSwitcherIcon"
-                    :get-children="getNodeChildren"
-                    v-model:expanded-keys="expandedKeys"
-                    :node-props="(info: any) => ({ onDblclick: () => handleNodeDblClick(info.option.key) })"
-                    @update:selected-keys="handleNodeClick"
-                  />
-                </NSpin>
-              </NScrollbar>
+  <NCard size="small" class="das-page" :content-style="{ padding: '12px' }">
+    <NGrid cols="24" x-gap="12" y-gap="12">
+      <NGi v-if="showLeftPanel" span="7">
+        <NCard size="small" title="数据库选择" :segmented="{ content: true }" class="das-left-card">
+          <template #header-extra>
+            <NSpace :size="6">
+              <NTooltip trigger="hover" placement="top" :show-arrow="false">
+                <template #trigger>
+                  <NButton quaternary circle size="small" :loading="refreshLoading" @click="refreshSchemas">
+                    <template #icon><SvgIcon icon="carbon:renew" /></template>
+                  </NButton>
+                </template>
+                刷新数据库列表
+              </NTooltip>
+              <NTooltip trigger="hover" placement="top" :show-arrow="false">
+                <template #trigger>
+                  <NButton quaternary circle size="small" @click="foldLeft">
+                    <template #icon><SvgIcon icon="line-md:menu-fold-left" /></template>
+                  </NButton>
+                </template>
+                折叠左侧面板
+              </NTooltip>
             </NSpace>
-          </NCard>
-        </NLayoutSider>
-        <NLayoutContent native-scrollbar>
-          <NSpace v-if="asideWidth === 0" :size="8">
-            <NTooltip trigger="hover" placement="top" :show-arrow="false">
-              <template #trigger>
-                <NButton quaternary size="small" @click="foldLeft">
-                  <template #icon>
-                    <SvgIcon icon="line-md:menu-fold-right" />
-                  </template>
-                  展开左侧
-                </NButton>
-              </template>
-              展开左侧栏
-            </NTooltip>
+          </template>
+          <NSpace vertical :size="10">
+            <NSelect
+              v-model:value="bindTitle"
+              :options="schemas.map((s: any) => ({
+                label: `${s.remark || s.instanceName || s.hostname}:${s.schema}`,
+                value: `${s.instance_id}#${s.schema}#${s.db_type}`
+              }))"
+              filterable
+              clearable
+              placeholder="请选择库名..."
+              @update:value="getTables"
+            />
+            <NInput
+              v-if="showSearch"
+              v-model:value="leftTableSearch"
+              clearable
+              placeholder="输入要搜索的表名..."
+              @keyup.enter="onSearch(leftTableSearch)"
+            />
+            <NText depth="3" class="das-hint">搜索不到需要的表？试试刷新按钮。</NText>
+            <NScrollbar class="das-tree-scroll">
+              <NSpin :show="treeLoading">
+                <NTree
+                  :data="filteredTreeData"
+                  block-line
+                  show-line
+                  :virtual-scroll="true"
+                  :render-label="renderTreeLabel"
+                  :render-switcher-icon="renderSwitcherIcon"
+                  :get-children="getNodeChildren"
+                  v-model:expanded-keys="expandedKeys"
+                  :node-props="(info: any) => ({ onDblclick: () => handleNodeDblClick(info.option.key) })"
+                  @update:selected-keys="handleNodeClick"
+                />
+              </NSpin>
+            </NScrollbar>
           </NSpace>
-          <NTabs
-            v-model:value="activeKey"
-            type="card"
-            size="small"
-            addable
-            @add="add"
-            @close="remove"
-            @update:value="changeTab"
-          >
-            <NTabPane
-              v-for="pane in panes"
-              :key="pane.key"
-              :name="pane.key"
-              :tab="pane.title"
-              :closable="pane.closable"
-            >
-              <NSpace vertical :size="12">
-                <NCard size="small" :content-style="{ padding: '8px' }">
-                  <div class="code-editor-container" :ref="(el) => setEditorRef(pane, el as unknown as HTMLElement)" />
-                  <NSpace :size="6">
-                    <NButton size="tiny" type="primary" :loading="pane.loading" @click="executeSQL(pane)">
-                      <template #icon><SvgIcon icon="carbon:flash" /></template>
-                      执行SQL
-                    </NButton>
-                    <NButton size="tiny" @click="formatSQL(pane)">
-                      <template #icon><SvgIcon icon="carbon:code" /></template>
-                      格式化
-                    </NButton>
-                    <NButton size="tiny" @click="loadDBDictData">
-                      <template #icon><SvgIcon icon="carbon:document" /></template>
-                      数据字典
-                    </NButton>
-                    <NButton size="tiny" @click="gotoFavorite">
-                      <template #icon><SvgIcon icon="carbon:star" /></template>
-                      收藏SQL
-                    </NButton>
-                    <NButton size="tiny" @click="gotoHistory">
-                      <template #icon><SvgIcon icon="carbon:time" /></template>
-                      历史查询
-                    </NButton>
-                  </NSpace> 
-                </NCard>
+        </NCard>
+      </NGi>
+      <NGi :span="rightSpan">
+        <NSpace vertical :size="12">
+          <NCard v-if="!showLeftPanel" size="small" class="das-ghost-card" :bordered="false">
+            <NButton quaternary size="small" @click="foldLeft">
+              <template #icon><SvgIcon icon="line-md:menu-fold-right" /></template>
+              展开数据库面板
+            </NButton>
+          </NCard>
+          <NCard size="small" class="das-editor-shell" :segmented="{ content: true }">
+            <template #header>
+              <NSpace justify="space-between" align="center" class="das-shell-header">
+                <div class="das-title">
+                  <span>SQL 工作台</span>
+                  <NTag size="small" type="success">{{ currentSchemaLabel }}</NTag>
+                </div>
+                <NSpace :size="8" wrap>
+                  <NButton quaternary size="small" @click="gotoFavorite">
+                    <template #icon><SvgIcon icon="carbon:star" /></template>
+                    收藏 SQL
+                  </NButton>
+                  <NButton quaternary size="small" @click="gotoHistory">
+                    <template #icon><SvgIcon icon="carbon:time" /></template>
+                    历史查询
+                  </NButton>
+                  <NButton quaternary size="small" @click="loadDBDictData">
+                    <template #icon><SvgIcon icon="carbon:document" /></template>
+                    数据字典
+                  </NButton>
+                  <NButton quaternary size="small" @click="refreshTables">
+                    <template #icon><SvgIcon icon="carbon:renew" /></template>
+                    刷新表
+                  </NButton>
+                </NSpace>
               </NSpace>
-              <div>
-                <NCard v-if="pane.result" size="small" :bordered="true" :content-style="{ padding: '8px' }">
-                  <template #header>
-                    <NSpace justify="space-between" align="center">
-                      <span>查询结果</span>
-                      <NSpace>
+            </template>
+            <NTabs
+              v-model:value="activeKey"
+              type="card"
+              size="small"
+              addable
+              @add="add"
+              @close="remove"
+              @update:value="changeTab"
+            >
+              <NTabPane
+                v-for="pane in panes"
+                :key="pane.key"
+                :name="pane.key"
+                :tab="pane.title"
+                :closable="pane.closable"
+              >
+                <NSpace vertical :size="12">
+                  <NCard size="small" :segmented="{ content: true }" class="das-editor-card">
+                    <template #header>
+                      <NSpace justify="space-between" align="center">
+                        <div class="das-subtitle">
+                          <SvgIcon icon="carbon:terminal" class="mr-4px" />
+                          SQL 编辑器
+                        </div>
+                        <NSpace :size="6">
+                          <NButton quaternary size="tiny" @click="formatSQL(pane)">
+                            <template #icon><SvgIcon icon="carbon:code" /></template>
+                            格式化
+                          </NButton>
+                        </NSpace>
+                      </NSpace>
+                    </template>
+                    <div class="code-editor-container" :ref="(el) => setEditorRef(pane, el as unknown as HTMLElement)" />
+                    <div class="das-editor-actions">
+                      <NSpace :size="6" wrap>
+                        <NButton size="tiny" type="primary" :loading="pane.loading" @click="executeSQL(pane)">
+                          <template #icon><SvgIcon icon="carbon:flash" /></template>
+                          执行 SQL
+                        </NButton>
+                        <NButton size="tiny" @click="loadDBDictData">
+                          <template #icon><SvgIcon icon="carbon:document" /></template>
+                          数据字典
+                        </NButton>
+                        <NButton size="tiny" @click="gotoFavorite">
+                          <template #icon><SvgIcon icon="carbon:star" /></template>
+                          收藏 SQL
+                        </NButton>
+                        <NButton size="tiny" @click="gotoHistory">
+                          <template #icon><SvgIcon icon="carbon:time" /></template>
+                          历史查询
+                        </NButton>
+                      </NSpace>
+                    </div>
+                  </NCard>
+                  <NCard size="small" :segmented="{ content: true }" class="das-result-card">
+                    <template #header>
+                      <NSpace justify="space-between" align="center">
+                        <div class="das-subtitle">
+                          <SvgIcon icon="carbon:data-base" class="mr-4px" />
+                          查询结果
+                        </div>
                         <TableColumnSetting v-model:columns="tableColumnChecks" />
                       </NSpace>
-                    </NSpace>
-                  </template>
-                  <!-- 查询统计信息隐藏：耗时/影响行数/返回行数 -->
-                  <div v-if="getTableData(pane).length > 0">
-                    <vxe-table
-                      :data="getPagedTableData(pane)"
-                      border
-                      stripe
-                      :height="400"
-                      :column-config="{ resizable: true }"
-                      :resizable-config="{ showDragTip: false }"
-                      :scroll-y="{ enabled: true }"
-                      show-overflow
-                    >
-                      <vxe-column
-                        v-for="col in getVisibleColumns(pane)"
-                        :key="col.key"
-                        :field="col.key"
-                        :title="col.title"
-                        :min-width="col.minWidth || 120"
-                      />
-                    </vxe-table>
-                  </div>
-                  <div v-if="getTableData(pane).length > 0">
-                     <div class="mt-4 w-full flex items-center justify-between">
-                        <div class="flex items-center gap-12px text-12px">
-                           <SvgIcon icon="carbon:checkmark" class="text-16px text-#18a058" />
-                           <NText type="success">执行成功</NText>
-                           <NText>当前返回 [{{ getTableData(pane).length }}] 行</NText>
-                           <SvgIcon icon="carbon:time" class="ml-8px text-16px text-#2080f0" />
-                           <NText type="info">执行耗时 [{{ pane.result?.duration ?? '-' }}]</NText>
-                         </div>
-                        <NPagination
-                          v-model:page="pane.pagination!.currentPage"
-                          v-model:page-size="pane.pagination!.pageSize"
-                          :item-count="pane.pagination?.total ?? getTableData(pane).length"
-                          :page-sizes="pageSizes"
-                          show-size-picker
-                          size="small"
-                          :page-slot="9"
-                          @update:page="(p) => onPageChange(pane, p, pane.pagination!.pageSize)"
-                          @update:page-size="(s) => onPageChange(pane, pane.pagination!.currentPage, s)"
-                        />
+                    </template>
+                    <div v-if="pane.result">
+                      <div v-if="getTableData(pane).length > 0">
+                        <vxe-table
+                          :data="getPagedTableData(pane)"
+                          border
+                          stripe
+                          :height="400"
+                          :column-config="{ resizable: true }"
+                          :resizable-config="{ showDragTip: false }"
+                          :scroll-y="{ enabled: true }"
+                          show-overflow
+                        >
+                          <vxe-column
+                            v-for="col in getVisibleColumns(pane)"
+                            :key="col.key"
+                            :field="col.key"
+                            :title="col.title"
+                            :min-width="col.minWidth || 120"
+                          />
+                        </vxe-table>
+                        <div class="das-result-meta">
+                          <div class="das-result-stat">
+                            <SvgIcon icon="carbon:checkmark" class="text-16px text-#18a058" />
+                            <NText type="success">执行成功</NText>
+                            <NText>当前返回 [{{ getTableData(pane).length }}] 行</NText>
+                            <SvgIcon icon="carbon:time" class="ml-8px text-16px text-#2080f0" />
+                            <NText type="info">耗时 [{{ pane.result?.duration ?? '-' }}]</NText>
+                          </div>
+                          <NPagination
+                            v-model:page="pane.pagination!.currentPage"
+                            v-model:page-size="pane.pagination!.pageSize"
+                            :item-count="pane.pagination?.total ?? getTableData(pane).length"
+                            :page-sizes="pageSizes"
+                            show-size-picker
+                            size="small"
+                            :page-slot="9"
+                            @update:page="(p) => onPageChange(pane, p, pane.pagination!.pageSize)"
+                            @update:page-size="(s) => onPageChange(pane, pane.pagination!.currentPage, s)"
+                          />
+                        </div>
                       </div>
-                   </div>
-                  <div v-else>
-                    <NEmpty description="查询无结果" />
-                  </div>
-                </NCard>
-                <div v-else>
-                  <NEmpty description="暂无查询结果" />
-                </div>
-              </div>
-            </NTabPane>
-          </NTabs>
-        </NLayoutContent>
-      </NLayout>
-    </NCard>
+                      <div v-else class="das-empty-holder">
+                        <NEmpty description="查询无结果" />
+                      </div>
+                    </div>
+                    <div v-else class="das-empty-holder">
+                      <NEmpty description="暂无查询结果" />
+                    </div>
+                  </NCard>
+                </NSpace>
+              </NTabPane>
+            </NTabs>
+          </NCard>
+        </NSpace>
+      </NGi>
+    </NGrid>
+  </NCard>
 </template>
 
 <style scoped>
+.das-page {
+  height: calc(100vh - 120px);
+}
+.das-left-card {
+  height: calc(100vh - 144px);
+}
+.das-tree-scroll {
+  max-height: calc(100vh - 260px);
+}
+.das-shell-header .das-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+}
+.das-subtitle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+}
+.das-editor-card {
+  padding-bottom: 4px;
+}
+.das-editor-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+.das-result-card {
+  padding-bottom: 4px;
+}
+.das-result-meta {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.das-result-stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 12px;
+}
+.das-empty-holder {
+  padding: 32px 0;
+}
+.das-hint {
+  font-size: 12px;
+}
 /* 美化 SQL 编辑框：容器边框、圆角与内边距 */
 .code-editor-container {
   border: 1px solid var(--n-border-color);

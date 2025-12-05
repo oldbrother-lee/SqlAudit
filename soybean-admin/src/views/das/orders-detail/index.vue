@@ -1,449 +1,28 @@
-<template>
-  <div class="min-h-500px flex-col-stretch gap-16px order-detail-page">
-    <NSpin :show="loading">
-      <div v-if="orderDetail">
-        <!-- 新的顶部布局 -->
-        <div class="order-header-container">
-          <!-- 顶部标题栏 -->
-          <div class="flex justify-between items-center mb-4">
-            <div class="flex items-center gap-2">
-              <NButton text @click="router.back()" class="mr-2">
-                <template #icon>
-                  <div class="i-ic:round-arrow-back text-xl" />
-                </template>
-              </NButton>
-              <h1 class="text-2xl font-bold m-0">{{ orderDetail?.title?.split('_')[0] || '工单详情' }}</h1>
-              <NTag type="primary" size="small" bordered>#{{ orderDetail?.order_id }}</NTag>
-            </div>
-            <div class="flex gap-2">
-              <NButton type="primary" ghost size="small" @click="handleRefresh" :loading="refreshLoading">
-                <template #icon>
-                  <div class="i-ic:round-refresh" />
-                </template>
-                刷新
-              </NButton>
-              <!-- 操作按钮组 -->
-              <NButton 
-                v-if="actionType !== 'none'"
-                type="primary" 
-                size="small" 
-                @click="showActionModal" 
-                :disabled="actionDisabled"
-              >
-                {{ actionTitle }}
-              </NButton>
-              
-              <NButton 
-                v-if="orderDetail?.progress === '已复核'" 
-                type="info" 
-                size="small" 
-                @click="handleHook"
-              >
-                <template #icon>
-                  <div class="i-ant-design:link-outlined" />
-                </template>
-                Hook
-              </NButton>
-
-              <NButton 
-                type="error" 
-                ghost 
-                size="small" 
-                @click="showCloseModal" 
-                :disabled="closeDisabled"
-              >
-                <template #icon>
-                  <div class="i-ant-design:close-circle-outlined" />
-                </template>
-                关闭工单
-              </NButton>
-
-              <NButton 
-                v-if="showGenerateBtn"
-                type="warning"
-                ghost
-                size="small" 
-                @click="handleGenerateTasks"
-                :loading="executeLoading"
-              >
-                <template #icon>
-                  <div class="i-ant-design:thunderbolt-outlined" />
-                </template>
-                生成任务
-              </NButton>
-
-              <NButton 
-                v-if="showExecuteAllBtn"
-                type="success"
-                ghost
-                size="small" 
-                @click="handleExecuteAll"
-                :loading="executeLoading"
-              >
-                <template #icon>
-                  <div class="i-ant-design:thunderbolt-filled" />
-                </template>
-                执行全部
-              </NButton>
-            </div>
-          </div>
-
-          <!-- 工单基本信息区域 -->
-          <div class="order-info-section">
-            <div class="flex gap-6">
-              <!-- 左侧信息列表 -->
-              <div class="flex-1 grid grid-cols-3 gap-y-4 gap-x-8 text-sm">
-                <div class="info-item">
-                  <span class="label">申请人：</span>
-                  <span class="value font-medium">{{ orderDetail?.applicant }}</span>
-                </div>
-                <div class="info-item">
-                  <span class="label">工单环境：</span>
-                  <NTag type="error" size="small" :bordered="false">{{ orderDetail?.environment }}</NTag>
-                </div>
-                <div class="info-item">
-                  <span class="label">DB类型：</span>
-                  <span class="value">{{ orderDetail?.db_type }}</span>
-                </div>
-                <div class="info-item">
-                  <span class="label">工单类型：</span>
-                  <span class="value">{{ orderDetail?.sql_type }}</span>
-                </div>
-                <div class="info-item min-w-0">
-                  <span class="label flex-shrink-0 whitespace-nowrap">DB实例：</span>
-                  <NTooltip trigger="hover">
-                    <template #trigger>
-                      <span class="value truncate min-w-0">{{ orderDetail?.instance }}</span>
-                    </template>
-                    {{ orderDetail?.instance }}
-                  </NTooltip>
-                </div>
-                <div class="info-item">
-                  <span class="label">库名：</span>
-                  <span class="value text-blue-600">{{ orderDetail?.schema }}</span>
-                </div>
-                <div class="info-item" v-if="orderDetail?.sql_type === 'EXPORT'">
-                  <span class="label">文件格式：</span>
-                  <span class="value">{{ orderDetail?.export_file_format }}</span>
-                </div>
-                <div class="info-item">
-                  <span class="label">创建时间：</span>
-                  <span class="value">{{ orderDetail?.created_at }}</span>
-                </div>
-                <div class="info-item">
-                  <span class="label">更新时间：</span>
-                  <span class="value">{{ orderDetail?.updated_at }}</span>
-                </div>
-              </div>
-
-              <!-- 右侧状态展示 -->
-              <div class="status-display-section flex flex-col justify-center items-center px-8 border-l border-gray-100 dark:border-gray-800 min-w-[160px]">
-                <div class="sci-fi-status-container" :class="getStatusType">
-                  <div class="status-label-mini">CURRENT STATUS</div>
-                  <div class="status-content">
-                    <div class="status-indicator">
-                      <div class="status-dot"></div>
-                      <div class="status-ping"></div>
-                    </div>
-                    <span class="status-text">{{ getStatusLabel }}</span>
-                  </div>
-                  <div class="corner-accents">
-                    <div class="corner top-left"></div>
-                    <div class="corner top-right"></div>
-                    <div class="corner bottom-left"></div>
-                    <div class="corner bottom-right"></div>
-                  </div>
-                  <div class="scan-line"></div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- 步骤条区域 -->
-        <NCard 
-          size="small" 
-          class="mb-16px" 
-          title="审批流程"
-        >
-          <template #header-extra>
-            <NButton text size="small" @click="showProgress = !showProgress">
-              {{ showProgress ? '收起' : '展开' }}
-              <template #icon>
-                <div :class="showProgress ? 'i-ic:round-keyboard-arrow-up' : 'i-ic:round-keyboard-arrow-down'" />
-              </template>
-            </NButton>
-          </template>
-          
-          <NCollapseTransition :show="showProgress">
-            <NSteps :current="currentStep" :status="currentStepStatus" class="mb-6 pt-4">
-              <NStep title="创建工单" description="提交申请" />
-              <NStep title="待审核" description="等待审批" />
-              <NStep title="审核结果" description="批准或驳回" />
-              <NStep title="执行中" description="任务运行中" />
-              <NStep title="执行结果" description="完成或失败" />
-              <NStep title="已复核" description="最终确认" />
-            </NSteps>
-          </NCollapseTransition>
-
-          <div v-if="orderDetail?.approver?.length || orderDetail?.reviewer?.length || orderDetail?.cc?.length" class="mt-4 pt-4 border-t border-gray-100 dark:border-gray-800">
-            <div class="flex flex-wrap gap-8">
-              <div v-if="orderDetail?.approver?.length" class="flex items-center gap-2">
-                <span class="text-gray-500">审核人:</span>
-                <NSpace size="small">
-                  <NTag 
-                    v-for="item in orderDetail.approver" 
-                    :key="item.user" 
-                    size="small" 
-                    :type="item.status === 'pass' ? 'success' : (item.status === 'reject' ? 'error' : 'default')"
-                    :bordered="false"
-                  >
-                    {{ item.user }}
-                  </NTag>
-                </NSpace>
-              </div>
-
-              <div v-if="orderDetail?.reviewer?.length" class="flex items-center gap-2">
-                <span class="text-gray-500">复核人:</span>
-                <NSpace size="small">
-                  <NTag 
-                    v-for="item in orderDetail.reviewer" 
-                    :key="item.user" 
-                    size="small" 
-                    :type="item.status === 'pass' ? 'success' : 'default'"
-                    :bordered="false"
-                  >
-                    {{ item.user }}
-                  </NTag>
-                </NSpace>
-              </div>
-
-              <div v-if="orderDetail?.cc?.length" class="flex items-center gap-2">
-                <span class="text-gray-500">抄送人:</span>
-                <NSpace size="small">
-                  <NTag v-for="user in orderDetail.cc" :key="user" size="small" :bordered="false">
-                    {{ user }}
-                  </NTag>
-                </NSpace>
-              </div>
-            </div>
-          </div>
-        </NCard>
-
-        <!-- 中间区域：两栏布局 -->
-        <div class="middle-content-container">
-          <!-- 左侧：进度信息 -->
-          <div class="progress-section">
-            <!-- 进度信息 -->
-            <NCard title="进度信息" size="small" class="mb-16px">
-              <div class="progress-info">
-                <div class="progress-item">
-                  <span class="progress-label">当前状态：</span>
-                  <NTag :type="getStatusType">{{ getStatusLabel }}</NTag>
-                </div>
-                <div class="progress-item" v-if="taskStats">
-                  <span class="progress-label">任务进度：</span>
-                  <div class="task-stats">
-                    <NSpace size="small">
-                      <NTag :bordered="false" type="primary" size="small">任务数: {{ taskStats.total }}</NTag>
-                      <NTag :bordered="false" type="success" size="small">已完成: {{ taskStats.completed }}</NTag>
-                      <NTag :bordered="false" type="default" size="small">未执行: {{ taskStats.unexecuted }}</NTag>
-                      <NTag :bordered="false" type="error" size="small">已失败: {{ taskStats.failed }}</NTag>
-                      <NTag :bordered="false" type="info" size="small">执行中: {{ taskStats.processing }}</NTag>
-                      <NTag :bordered="false" type="warning" size="small">已暂停: {{ taskStats.paused }}</NTag>
-                    </NSpace>
-                  </div>
-                </div>
-              </div>
-            </NCard>
-
-            <!-- 操作日志 -->
-            <NCard title="操作日志" size="small" v-if="opLogs.length">
-              <NTimeline>
-                <NTimelineItem
-                  v-for="(log, idx) in opLogs"
-                  :key="log.id ?? log.order_id ?? idx"
-                  :title="log.msg ?? log.action ?? '日志'"
-                  :content="log.msg ?? log.comment ?? ''"
-                  :time="log.updated_at ?? log.operateTime ?? ''"
-                />
-              </NTimeline>
-            </NCard>
-          </div>
-
-          <!-- 右侧：主要内容 -->
-          <div class="main-content-section">
-            <NCard size="small" class="mb-16px">
-              <NTabs type="line" animated v-model:value="activeTab" @update:value="handleTabChange">
-                <template #suffix>
-                  <NSpace v-if="activeTab === 'sql-content'" align="center" :size="12">
-                    <NButton size="small" type="primary" secondary @click="handleFormatSQL">格式化</NButton>
-                    <NButton size="small" type="primary" secondary :loading="checking" @click="handleSyntaxCheck">sql审核</NButton>
-                  </NSpace>
-                </template>
-                <!-- SQL内容标签页 -->
-                <NTabPane name="sql-content" tab="SQL内容">
-                  <div class="tab-content">
-                    <ReadonlySqlEditor 
-                      :sql-content="displaySqlContent"
-                      :show-pagination="true"
-                      :page-size="10"
-                      :theme="theme"
-                      height="500px"
-                      @page-change="handleSqlPageChange"
-                      @page-size-change="handleSqlPageSizeChange"
-                    />
-                    <NCard v-if="syntaxRows.length" title="语法检查结果" class="mt-4" size="small">
-                      <NDataTable :columns="syntaxColumns" :data="syntaxRows" :pagination="{ pageSize: 10 }" size="small" :scroll-x="1200" />
-                    </NCard>
-                  </div>
-                </NTabPane>
-
-                <!-- 评论标签页 -->
-                <!-- <NTabPane name="comments" tab="评论">
-                  <div class="tab-content">
-                    <NEmpty description="暂无评论" />
-                  </div>
-                </NTabPane> -->
-
-                <!-- 结果标签页 -->
-                <NTabPane name="results" tab="执行结果">
-                  <div class="tab-content">
-                    <div class="result-summary mb-16px">
-                      <NSpace>
-                        <NStatistic label="总执行数">
-                          <span class="text-16px font-bold">{{ taskStats?.total || 0 }}</span>
-                        </NStatistic>
-                        <NStatistic label="成功数">
-                          <span class="text-16px font-bold text-green-600">{{ taskStats?.completed || 0 }}</span>
-                        </NStatistic>
-                        <NStatistic label="失败数">
-                          <span class="text-16px font-bold text-red-600">{{ taskStats?.failed || 0 }}</span>
-                        </NStatistic>
-                        <NStatistic label="警告数">
-                          <span class="text-16px font-bold text-orange-600">{{ taskStats?.unexecuted || 0 }}</span>
-                        </NStatistic>
-                      </NSpace>
-                    </div>
-                    <NDataTable
-                      :columns="resultColumns"
-                      :data="resultData"
-                      :pagination="{ pageSize: 10 }"
-                      :bordered="false"
-                      size="small"
-                      :scroll-x="1000"
-                    />
-                  </div>
-                </NTabPane>
-
-                <!-- OSC进度标签页 -->
-                <NTabPane name="osc-progress" tab="OSC进度">
-                  <div class="tab-content">
-                    <LogViewer 
-                      :content="oscContent" 
-                      height="500px" 
-                      :theme="theme" 
-                    />
-                  </div>
-                </NTabPane>
-              </NTabs>
-            </NCard>
-
-            <!-- 操作按钮 - 临时隐藏 -->
-            <NCard title="操作" size="small" class="mb-16px" style="display: none;">
-              <NSpace>
-                <NButton type="primary" @click="handleRetweet">转推</NButton>
-                <NButton @click="handleHook">Hook</NButton>
-                <NButton type="error" @click="handleClose">关闭工单</NButton>
-                <NButton type="success" @click="handleExecute">执行工单</NButton>
-              </NSpace>
-            </NCard>
-          </div>
-        </div>
-
-        <!-- 底部：标签页区域 - 已移除，整合到上方 -->
-      </div>
-
-      <div v-else class="flex-center min-h-200px">
-        <NEmpty description="工单不存在或已被删除" />
-      </div>
-    </NSpin>
-
-    <NModal v-model:show="actionVisible" preset="dialog" title="请输入附加信息">
-      <NInput v-model:value="confirmMsg" type="textarea" :autosize="{minRows:3,maxRows:8}" />
-      <template #action>
-        <NSpace>
-          <NButton @click="handleActionCancel">{{ confirmCancelText }}</NButton>
-          <NButton type="primary" :loading="loading" @click="handleActionOk">{{ confirmOkText }}</NButton>
-        </NSpace>
-      </template>
-    </NModal>
-
-    <NModal v-model:show="closeVisible" preset="dialog" title="请输入附加信息">
-      <NInput v-model:value="confirmMsg" type="textarea" :autosize="{minRows:3,maxRows:5}" />
-      <template #action>
-        <NSpace>
-          <NButton @click="handleCloseCancel">取消</NButton>
-          <NButton type="primary" :loading="loading" @click="handleCloseOk">确定</NButton>
-        </NSpace>
-      </template>
-    </NModal>
-
-    <NModal v-model:show="hookVisible" preset="dialog" title="HOOK工单" :style="{width:'65%'}">
-      <NForm :model="hookForm">
-        <NFormItem label="工单ID"><NInput v-model:value="hookForm.order_id" disabled /></NFormItem>
-        <NFormItem label="当前工单"><NInput v-model:value="hookForm.title" disabled /></NFormItem>
-        <NFormItem label="DB类型"><NInput v-model:value="hookForm.db_type" disabled /></NFormItem>
-        <NFormItem label="当前库"><NInput v-model:value="hookForm.schema" disabled /></NFormItem>
-        <NFormItem label="审核状态">
-          <NSwitch v-model:value="resetToPending" :round="true" />
-        </NFormItem>
-        <NFormItem label="目标库">
-          <NCard>
-            <div v-for="(item, idx) in targetList" :key="idx" class="mb-8px">
-              <div class="grid grid-cols-12 gap-12px">
-                <div class="col-span-4">
-                  <NFormItem label="环境">
-                    <NSelect v-model:value="item.environment" :options="environmentOptions" clearable filterable @update:value="val => changeEnv(idx, val)" />
-                  </NFormItem>
-                </div>
-                <div class="col-span-4">
-                  <NFormItem label="实例">
-                    <NSelect v-model:value="item.instance_id" :options="instancesOptions[idx] || []" clearable filterable @update:value="val => changeInstance(idx, val)" />
-                  </NFormItem>
-                </div>
-                <div class="col-span-3">
-                  <NFormItem label="库名">
-                    <NSelect v-model:value="item.schema" :options="schemasOptions[idx] || []" clearable filterable />
-                  </NFormItem>
-                </div>
-                <div class="col-span-1 flex items-center">
-                  <NButton v-if="targetList.length > 1" tertiary @click="removeTarget(idx)">删除</NButton>
-                </div>
-              </div>
-            </div>
-            <NButton tertiary @click="addTarget">新增一行</NButton>
-          </NCard>
-        </NFormItem>
-      </NForm>
-      <template #action>
-        <NSpace>
-          <NButton @click="hideHookModal">取消</NButton>
-          <NButton type="primary" :loading="loading" @click="submitHook">确定</NButton>
-        </NSpace>
-      </template>
-    </NModal>
-  </div>
-</template>
-
 <script setup lang="ts">
-import { ref, computed, onMounted, h, onUnmounted, watch } from 'vue';
+import { computed, h, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { NTag, NButton, NSteps, NStep, NSpace, NTooltip, useMessage, useDialog, NDataTable } from 'naive-ui';
+import { NButton, NDataTable, NSpace, NStep, NSteps, NTag, NTooltip, useDialog, useMessage } from 'naive-ui';
 import type { TagProps } from 'naive-ui';
-import { useThemeStore } from '@/store/modules/theme';
 import { format } from 'sql-formatter';
-import { fetchOrderDetail, fetchOpLogs, fetchApproveOrder, fetchFeedbackOrder, fetchReviewOrder, fetchCloseOrder, fetchPreviewTasks, fetchGenerateTasks, fetchOrdersEnvironments, fetchOrdersInstances, fetchOrdersSchemas, fetchHookOrder, fetchTasks, fetchExecuteSingleTask, fetchExecuteAllTasks, fetchSyntaxCheck } from '@/service/api/orders';
+import {
+  fetchApproveOrder,
+  fetchCloseOrder,
+  fetchExecuteAllTasks,
+  fetchExecuteSingleTask,
+  fetchFeedbackOrder,
+  fetchGenerateTasks,
+  fetchHookOrder,
+  fetchOpLogs,
+  fetchOrderDetail,
+  fetchOrdersEnvironments,
+  fetchOrdersInstances,
+  fetchOrdersSchemas,
+  fetchPreviewTasks,
+  fetchReviewOrder,
+  fetchSyntaxCheck,
+  fetchTasks
+} from '@/service/api/orders';
+import { useThemeStore } from '@/store/modules/theme';
 import ReadonlySqlEditor from '@/components/custom/readonly-sql-editor.vue';
 import LogViewer from '@/components/custom/log-viewer.vue';
 
@@ -481,6 +60,7 @@ interface OrderDetailVO {
   is_backup?: boolean;
   scheduled?: boolean;
   progress: string;
+  execute_result?: string;
   fix_version: string;
   content: string;
   export_file_format: string;
@@ -516,21 +96,41 @@ const syntaxStatus = ref<number | null>(null);
 const localSqlContent = ref('');
 
 // 初始化 localSqlContent
-watch(() => orderDetail.value, (val) => {
-  if (val) {
-    localSqlContent.value = val.content;
-    syntaxStatus.value = null;
-    syntaxRows.value = [];
+watch(
+  () => orderDetail.value,
+  val => {
+    if (val) {
+      localSqlContent.value = val.content;
+      syntaxStatus.value = null;
+      syntaxRows.value = [];
+    }
   }
-});
+);
 
 const syntaxColumns = [
-  { title: '检测结果', key: 'result', width: 100, fixed: 'left' as const, render: (row: any) => h(NTag, { type: row?.level === 'INFO' && (!row?.summary || row.summary.length === 0) ? 'success' : 'error' }, { default: () => (row?.level === 'INFO' && (!row?.summary || row.summary.length === 0) ? '通过' : '失败') }) },
+  {
+    title: '检测结果',
+    key: 'result',
+    width: 100,
+    fixed: 'left' as const,
+    render: (row: any) =>
+      h(
+        NTag,
+        { type: row?.level === 'INFO' && (!row?.summary || row.summary.length === 0) ? 'success' : 'error' },
+        { default: () => (row?.level === 'INFO' && (!row?.summary || row.summary.length === 0) ? '通过' : '失败') }
+      )
+  },
   { title: '错误级别', key: 'level', width: 80 },
   { title: '影响行数', key: 'affected_rows', width: 90 },
   { title: '类型', key: 'type', width: 90 },
   { title: '指纹', key: 'finger_id', width: 120 },
-  { title: '信息提示', key: 'summary', width: 300, ellipsis: { tooltip: { style: { maxWidth: '600px' } } as any }, render: (row: any) => (row.summary && row.summary.length ? row.summary.join('；') : '—') },
+  {
+    title: '信息提示',
+    key: 'summary',
+    width: 300,
+    ellipsis: { tooltip: { style: { maxWidth: '600px' } } as any },
+    render: (row: any) => (row.summary && row.summary.length ? row.summary.join('；') : '—')
+  },
   { title: 'SQL', key: 'query', width: 500, ellipsis: { tooltip: { style: { maxWidth: '800px' } } as any } }
 ];
 
@@ -586,18 +186,32 @@ const displaySqlContent = computed(() => {
 
 // 步骤条当前步骤
 const currentStep = computed(() => {
-  const p = orderDetail.value?.progress || '';
-  if (p === '待审核') return 2;
-  if (['已批准', '已驳回'].includes(p)) return 3;
-  if (p === '执行中') return 4;
-  if (['已完成', '已关闭', '已失败'].includes(p)) return 5;
-  if (p === '已复核') return 6;
-  return 1;
+  const status = orderDetail.value?.progress;
+  switch (status) {
+    case '待审核':
+      return 2;
+    case '已驳回':
+      return 3;
+    case '已批准':
+      return 3;
+    case '执行中':
+      return 4;
+    case '已完成':
+      return 5;
+    case '已失败':
+      return 5;
+    case '已复核':
+      return 6;
+    case '已关闭':
+      return 6;
+    default:
+      return 1;
+  }
 });
 
-// 步骤条状态
 const currentStepStatus = computed(() => {
-  const p = orderDetail.value?.progress || '';
+  const p = orderDetail.value?.progress;
+  if (!p) return 'process';
   if (p === '已驳回' || p === '已失败') return 'error';
   if (['已完成', '已复核'].includes(p)) return 'finish';
   return 'process';
@@ -611,27 +225,27 @@ const initWebSocket = () => {
   if (websocket.value) return;
 
   const orderId = route.params.id as string;
-  
+
   let wsUrl = '';
   const isDev = import.meta.env.DEV;
   const serviceBaseUrl = import.meta.env.VITE_SERVICE_BASE_URL;
 
   if (isDev && serviceBaseUrl) {
     // Replace http with ws, https with wss
-    wsUrl = serviceBaseUrl.replace(/^http/, 'ws') + `/ws/${orderId}`;
+    wsUrl = `${serviceBaseUrl.replace(/^http/, 'ws')}/ws/${orderId}`;
   } else {
     const protocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
     const host = window.location.host;
     wsUrl = `${protocol}${host}/ws/${orderId}`;
   }
-  
+
   websocket.value = new WebSocket(wsUrl);
 
   websocket.value.onopen = () => {
     console.log('WebSocket connected');
   };
 
-  websocket.value.onmessage = (event) => {
+  websocket.value.onmessage = event => {
     try {
       const result = JSON.parse(event.data);
       if (result.type === 'processlist') {
@@ -650,16 +264,16 @@ const initWebSocket = () => {
       }
     } catch (e) {
       console.error('WebSocket message parse error:', e);
-      oscContent.value += event.data + '\n';
+      oscContent.value += `${event.data}\n`;
     }
   };
 
-  websocket.value.onerror = (error) => {
+  websocket.value.onerror = error => {
     console.error('WebSocket error:', error);
     // Reconnect after 3s
     setTimeout(() => {
-        websocket.value = null;
-        initWebSocket();
+      websocket.value = null;
+      initWebSocket();
     }, 3000);
   };
 
@@ -713,11 +327,11 @@ const resultColumns = computed<any[]>(() => [
     width: 100,
     render: (row: any) => {
       const statusMap: Record<string, { label: string; type: TagProps['type'] }> = {
-        '未执行': { label: '未执行', type: 'default' },
-        '执行中': { label: '执行中', type: 'info' },
-        '已完成': { label: '成功', type: 'success' },
-        '已失败': { label: '失败', type: 'error' },
-        '已跳过': { label: '跳过', type: 'warning' }
+        未执行: { label: '未执行', type: 'default' },
+        执行中: { label: '执行中', type: 'info' },
+        已完成: { label: '成功', type: 'success' },
+        已失败: { label: '失败', type: 'error' },
+        已跳过: { label: '跳过', type: 'warning' }
       };
       const status = statusMap[row.progress] || { label: row.progress || '未知', type: 'default' };
       return h(NTag, { type: status.type, bordered: false }, { default: () => status.label });
@@ -772,11 +386,13 @@ const resultColumns = computed<any[]>(() => [
     render: (row: any) => {
       // 检查工单状态是否允许执行
       // 增加 '已完成', '已失败' 状态，允许在这些状态下重试失败的任务
-      const isOrderExecutable = ['已批准', '执行中', '已复核', '已完成', '已失败'].includes(orderDetail.value?.progress || '');
+      const isOrderExecutable = ['已批准', '执行中', '已复核', '已完成', '已失败'].includes(
+        orderDetail.value?.progress || ''
+      );
       // 检查任务状态
       const isTaskCompleted = row.progress === '已完成';
       const isTaskRunning = row.progress === '执行中';
-      
+
       // 始终显示执行按钮，根据状态禁用
       return h(
         NButton,
@@ -808,23 +424,41 @@ const statusMap = {
 
 // 状态类型映射（基于 progress 中文状态）
 const progressTypeMap: Record<string, TagProps['type']> = {
-  '待审核': 'warning',
-  '已批准': 'success',
-  '已驳回': 'error',
-  '执行中': 'info',
-  '已完成': 'success',
-  '已关闭': 'default'
+  待审核: 'warning',
+  已批准: 'success',
+  已驳回: 'error',
+  执行中: 'info',
+  已完成: 'success',
+  已关闭: 'default'
 };
 
 // 获取状态标签类型
 const getStatusType = computed((): TagProps['type'] => {
   if (!orderDetail.value) return 'default';
+
+  // 优先显示执行结果状态
+  if (orderDetail.value.execute_result) {
+    const type = orderDetail.value.execute_result;
+    if (type === 'success') return 'success';
+    if (type === 'error') return 'error';
+    if (type === 'warning') return 'warning';
+  }
+
   return progressTypeMap[orderDetail.value.progress] || 'default';
 });
 
 // 获取状态标签文本
 const getStatusLabel = computed(() => {
   if (!orderDetail.value) return '未知状态';
+
+  // 优先显示执行结果文本
+  if (orderDetail.value.execute_result) {
+    const type = orderDetail.value.execute_result;
+    if (type === 'success') return '全部成功';
+    if (type === 'error') return '全部失败';
+    if (type === 'warning') return '部分失败';
+  }
+
   return orderDetail.value.progress || '未知状态';
 });
 
@@ -846,7 +480,7 @@ const actionDisabled = computed(() => {
   if (p === '待审核') {
     return syntaxStatus.value !== 0;
   }
-  return ['已复核', '已驳回', '已关闭'].includes(p) ? true : false;
+  return Boolean(['已复核', '已驳回', '已关闭'].includes(p));
 });
 
 const showGenerateBtn = computed(() => {
@@ -910,7 +544,7 @@ const getOrderDetail = async () => {
     if (data) {
       orderDetail.value = data as unknown as OrderDetailVO;
       // 这里的 taskStats 需要从 preview 或 tasks 接口获取，暂时保持 null
-      // taskStats.value = null; 
+      // taskStats.value = null;
     }
   } catch (error) {
     console.error('获取工单详情失败:', error);
@@ -1107,7 +741,18 @@ const handleExecuteAll = async () => {
 
     const { data, error } = await fetchExecuteAllTasks({ order_id: orderDetail.value.order_id } as any);
     if (error) return;
-    window.$message?.success(data?.message || '已触发全部执行');
+
+    const msgType = data?.data?.type;
+    const msgContent = data?.message || '已触发全部执行';
+
+    if (msgType === 'error') {
+      window.$message?.error(msgContent);
+    } else if (msgType === 'warning') {
+      window.$message?.warning(msgContent);
+    } else {
+      window.$message?.success(msgContent);
+    }
+
     activeTab.value = 'results';
     handleRefresh();
   } catch (e: any) {
@@ -1136,7 +781,12 @@ const schemasOptions = ref<Record<number, { label: string; value: any }[]>>({});
 
 const showHookModal = async () => {
   if (!orderDetail.value) return;
-  hookForm.value = { order_id: orderDetail.value.order_id, title: orderDetail.value.title, db_type: orderDetail.value.db_type, schema: orderDetail.value.schema } as any;
+  hookForm.value = {
+    order_id: orderDetail.value.order_id,
+    title: orderDetail.value.title,
+    db_type: orderDetail.value.db_type,
+    schema: orderDetail.value.schema
+  } as any;
   hookVisible.value = true;
   const envs = await fetchOrdersEnvironments({ is_page: false });
   environmentOptions.value = (envs.data || []).map((e: any) => ({ label: e.name, value: e.id }));
@@ -1172,7 +822,11 @@ const changeInstance = async (idx: number, val: any) => {
 const submitHook = async () => {
   loading.value = true;
   try {
-    const target = targetList.value.map(i => ({ environment: i.environment, instance_id: i.instance_id, schema: i.schema }));
+    const target = targetList.value.map(i => ({
+      environment: i.environment,
+      instance_id: i.instance_id,
+      schema: i.schema
+    }));
     const progress = resetToPending.value ? '待审核' : '已批准';
     await fetchHookOrder({ ...hookForm.value, target, progress } as any);
     window.$message?.success('Hook成功');
@@ -1184,6 +838,452 @@ const submitHook = async () => {
   }
 };
 </script>
+
+<template>
+  <div class="order-detail-page min-h-500px flex-col-stretch gap-16px">
+    <NSpin :show="loading">
+      <div v-if="orderDetail">
+        <!-- 新的顶部布局 -->
+        <div class="order-header-container">
+          <!-- 顶部标题栏 -->
+          <div class="mb-4 flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <NButton text class="mr-2" @click="router.back()">
+                <template #icon>
+                  <div class="i-ic:round-arrow-back text-xl" />
+                </template>
+              </NButton>
+              <h1 class="m-0 text-2xl font-bold">{{ orderDetail?.title?.split('_')[0] || '工单详情' }}</h1>
+              <NTag type="primary" size="small" bordered>#{{ orderDetail?.order_id }}</NTag>
+            </div>
+            <div class="flex gap-2">
+              <NButton type="primary" ghost size="small" :loading="refreshLoading" @click="handleRefresh">
+                <template #icon>
+                  <div class="i-ic:round-refresh" />
+                </template>
+                刷新
+              </NButton>
+              <!-- 操作按钮组 -->
+              <NButton
+                v-if="actionType !== 'none'"
+                type="primary"
+                size="small"
+                :disabled="actionDisabled"
+                @click="showActionModal"
+              >
+                {{ actionTitle }}
+              </NButton>
+
+              <NButton v-if="orderDetail?.progress === '已复核'" type="info" size="small" @click="handleHook">
+                <template #icon>
+                  <div class="i-ant-design:link-outlined" />
+                </template>
+                Hook
+              </NButton>
+
+              <NButton type="error" ghost size="small" :disabled="closeDisabled" @click="showCloseModal">
+                <template #icon>
+                  <div class="i-ant-design:close-circle-outlined" />
+                </template>
+                关闭工单
+              </NButton>
+
+              <NButton
+                v-if="showGenerateBtn"
+                type="warning"
+                ghost
+                size="small"
+                :loading="executeLoading"
+                @click="handleGenerateTasks"
+              >
+                <template #icon>
+                  <div class="i-ant-design:thunderbolt-outlined" />
+                </template>
+                生成任务
+              </NButton>
+
+              <NButton
+                v-if="showExecuteAllBtn"
+                type="success"
+                ghost
+                size="small"
+                :loading="executeLoading"
+                @click="handleExecuteAll"
+              >
+                <template #icon>
+                  <div class="i-ant-design:thunderbolt-filled" />
+                </template>
+                执行全部
+              </NButton>
+            </div>
+          </div>
+
+          <!-- 工单基本信息区域 -->
+          <div class="order-info-section">
+            <div class="flex gap-6">
+              <!-- 左侧信息列表 -->
+              <div class="grid grid-cols-3 flex-1 gap-x-8 gap-y-4 text-sm">
+                <div class="info-item">
+                  <span class="label">申请人：</span>
+                  <span class="value font-medium">{{ orderDetail?.applicant }}</span>
+                </div>
+                <div class="info-item">
+                  <span class="label">工单环境：</span>
+                  <NTag type="error" size="small" :bordered="false">{{ orderDetail?.environment }}</NTag>
+                </div>
+                <div class="info-item">
+                  <span class="label">DB类型：</span>
+                  <span class="value">{{ orderDetail?.db_type }}</span>
+                </div>
+                <div class="info-item">
+                  <span class="label">工单类型：</span>
+                  <span class="value">{{ orderDetail?.sql_type }}</span>
+                </div>
+                <div class="info-item min-w-0">
+                  <span class="label flex-shrink-0 whitespace-nowrap">DB实例：</span>
+                  <NTooltip trigger="hover">
+                    <template #trigger>
+                      <span class="value min-w-0 truncate">{{ orderDetail?.instance }}</span>
+                    </template>
+                    {{ orderDetail?.instance }}
+                  </NTooltip>
+                </div>
+                <div class="info-item">
+                  <span class="label">库名：</span>
+                  <span class="value text-blue-600">{{ orderDetail?.schema }}</span>
+                </div>
+                <div v-if="orderDetail?.sql_type === 'EXPORT'" class="info-item">
+                  <span class="label">文件格式：</span>
+                  <span class="value">{{ orderDetail?.export_file_format }}</span>
+                </div>
+                <div class="info-item">
+                  <span class="label">创建时间：</span>
+                  <span class="value">{{ orderDetail?.created_at }}</span>
+                </div>
+                <div class="info-item">
+                  <span class="label">更新时间：</span>
+                  <span class="value">{{ orderDetail?.updated_at }}</span>
+                </div>
+              </div>
+
+              <!-- 右侧状态展示 -->
+              <div
+                class="status-display-section min-w-[160px] flex flex-col items-center justify-center border-l border-gray-100 px-8 dark:border-gray-800"
+              >
+                <div class="sci-fi-status-container" :class="getStatusType">
+                  <div class="status-label-mini">CURRENT STATUS</div>
+                  <div class="status-content">
+                    <div class="status-indicator">
+                      <div class="status-dot"></div>
+                      <div class="status-ping"></div>
+                    </div>
+                    <span class="status-text">{{ getStatusLabel }}</span>
+                  </div>
+                  <div class="corner-accents">
+                    <div class="corner top-left"></div>
+                    <div class="corner top-right"></div>
+                    <div class="corner bottom-left"></div>
+                    <div class="corner bottom-right"></div>
+                  </div>
+                  <div class="scan-line"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 步骤条区域 -->
+        <NCard size="small" class="mb-16px" title="审批流程">
+          <template #header-extra>
+            <NButton text size="small" @click="showProgress = !showProgress">
+              {{ showProgress ? '收起' : '展开' }}
+              <template #icon>
+                <div :class="showProgress ? 'i-ic:round-keyboard-arrow-up' : 'i-ic:round-keyboard-arrow-down'" />
+              </template>
+            </NButton>
+          </template>
+
+          <NCollapseTransition :show="showProgress">
+            <NSteps :current="currentStep" :status="currentStepStatus" class="mb-6 pt-4">
+              <NStep title="创建工单" description="提交申请" />
+              <NStep title="待审核" description="等待审批" />
+              <NStep title="审核结果" description="批准或驳回" />
+              <NStep title="执行中" description="任务运行中" />
+              <NStep title="执行结果" description="完成或失败" />
+              <NStep title="已复核" description="最终确认" />
+            </NSteps>
+          </NCollapseTransition>
+
+          <div
+            v-if="orderDetail?.approver?.length || orderDetail?.reviewer?.length || orderDetail?.cc?.length"
+            class="mt-4 border-t border-gray-100 pt-4 dark:border-gray-800"
+          >
+            <div class="flex flex-wrap gap-8">
+              <div v-if="orderDetail?.approver?.length" class="flex items-center gap-2">
+                <span class="text-gray-500">审核人:</span>
+                <NSpace size="small">
+                  <NTag
+                    v-for="item in orderDetail.approver"
+                    :key="item.user"
+                    size="small"
+                    :type="item.status === 'pass' ? 'success' : item.status === 'reject' ? 'error' : 'default'"
+                    :bordered="false"
+                  >
+                    {{ item.user }}
+                  </NTag>
+                </NSpace>
+              </div>
+
+              <div v-if="orderDetail?.reviewer?.length" class="flex items-center gap-2">
+                <span class="text-gray-500">复核人:</span>
+                <NSpace size="small">
+                  <NTag
+                    v-for="item in orderDetail.reviewer"
+                    :key="item.user"
+                    size="small"
+                    :type="item.status === 'pass' ? 'success' : 'default'"
+                    :bordered="false"
+                  >
+                    {{ item.user }}
+                  </NTag>
+                </NSpace>
+              </div>
+
+              <div v-if="orderDetail?.cc?.length" class="flex items-center gap-2">
+                <span class="text-gray-500">抄送人:</span>
+                <NSpace size="small">
+                  <NTag v-for="user in orderDetail.cc" :key="user" size="small" :bordered="false">
+                    {{ user }}
+                  </NTag>
+                </NSpace>
+              </div>
+            </div>
+          </div>
+        </NCard>
+
+        <!-- 中间区域：两栏布局 -->
+        <div class="middle-content-container">
+          <!-- 左侧：进度信息 -->
+          <div class="progress-section">
+            <!-- 进度信息 -->
+            <NCard title="进度信息" size="small" class="mb-16px">
+              <div class="progress-info">
+                <div class="progress-item">
+                  <span class="progress-label">当前状态：</span>
+                  <NTag :type="getStatusType">{{ getStatusLabel }}</NTag>
+                </div>
+                <div v-if="taskStats" class="progress-item">
+                  <span class="progress-label">任务进度：</span>
+                  <div class="task-stats">
+                    <NSpace size="small">
+                      <NTag :bordered="false" type="primary" size="small">任务数: {{ taskStats.total }}</NTag>
+                      <NTag :bordered="false" type="success" size="small">成功数: {{ taskStats.completed }}</NTag>
+                      <NTag :bordered="false" type="default" size="small">未执行: {{ taskStats.unexecuted }}</NTag>
+                      <NTag :bordered="false" type="error" size="small">已失败: {{ taskStats.failed }}</NTag>
+                      <NTag :bordered="false" type="info" size="small">执行中: {{ taskStats.processing }}</NTag>
+                      <NTag :bordered="false" type="warning" size="small">已暂停: {{ taskStats.paused }}</NTag>
+                    </NSpace>
+                  </div>
+                </div>
+              </div>
+            </NCard>
+
+            <!-- 操作日志 -->
+            <NCard v-if="opLogs.length" title="操作日志" size="small">
+              <NTimeline>
+                <NTimelineItem
+                  v-for="(log, idx) in opLogs"
+                  :key="log.id ?? log.order_id ?? idx"
+                  :title="log.msg ?? log.action ?? '日志'"
+                  :content="log.msg ?? log.comment ?? ''"
+                  :time="log.updated_at ?? log.operateTime ?? ''"
+                />
+              </NTimeline>
+            </NCard>
+          </div>
+
+          <!-- 右侧：主要内容 -->
+          <div class="main-content-section">
+            <NCard size="small" class="mb-16px">
+              <NTabs v-model:value="activeTab" type="line" animated @update:value="handleTabChange">
+                <template #suffix>
+                  <NSpace v-if="activeTab === 'sql-content'" align="center" :size="12">
+                    <NButton size="small" type="primary" secondary @click="handleFormatSQL">格式化</NButton>
+                    <NButton size="small" type="primary" secondary :loading="checking" @click="handleSyntaxCheck">
+                      sql审核
+                    </NButton>
+                  </NSpace>
+                </template>
+                <!-- SQL内容标签页 -->
+                <NTabPane name="sql-content" tab="SQL内容">
+                  <div class="tab-content">
+                    <ReadonlySqlEditor
+                      :sql-content="displaySqlContent"
+                      :show-pagination="true"
+                      :page-size="10"
+                      :theme="theme"
+                      height="500px"
+                      @page-change="handleSqlPageChange"
+                      @page-size-change="handleSqlPageSizeChange"
+                    />
+                    <NCard v-if="syntaxRows.length" title="语法检查结果" class="mt-4" size="small">
+                      <NDataTable
+                        :columns="syntaxColumns"
+                        :data="syntaxRows"
+                        :pagination="{ pageSize: 10 }"
+                        size="small"
+                        :scroll-x="1200"
+                      />
+                    </NCard>
+                  </div>
+                </NTabPane>
+
+                <!-- 评论标签页 -->
+                <!--
+ <NTabPane name="comments" tab="评论">
+                  <div class="tab-content">
+                    <NEmpty description="暂无评论" />
+                  </div>
+                </NTabPane> 
+-->
+
+                <!-- 结果标签页 -->
+                <NTabPane name="results" tab="执行结果">
+                  <div class="tab-content">
+                    <div class="result-summary mb-16px">
+                      <NSpace>
+                        <NStatistic label="总执行数">
+                          <span class="text-16px font-bold">{{ taskStats?.total || 0 }}</span>
+                        </NStatistic>
+                        <NStatistic label="成功数">
+                          <span class="text-16px text-green-600 font-bold">{{ taskStats?.completed || 0 }}</span>
+                        </NStatistic>
+                        <NStatistic label="失败数">
+                          <span class="text-16px text-red-600 font-bold">{{ taskStats?.failed || 0 }}</span>
+                        </NStatistic>
+                        <NStatistic label="警告数">
+                          <span class="text-16px text-orange-600 font-bold">{{ taskStats?.unexecuted || 0 }}</span>
+                        </NStatistic>
+                      </NSpace>
+                    </div>
+                    <NDataTable
+                      :columns="resultColumns"
+                      :data="resultData"
+                      :pagination="{ pageSize: 10 }"
+                      :bordered="false"
+                      size="small"
+                      :scroll-x="1000"
+                    />
+                  </div>
+                </NTabPane>
+
+                <!-- OSC进度标签页 -->
+                <NTabPane name="osc-progress" tab="OSC进度">
+                  <div class="tab-content">
+                    <LogViewer :content="oscContent" height="500px" :theme="theme" />
+                  </div>
+                </NTabPane>
+              </NTabs>
+            </NCard>
+
+            <!-- 操作按钮 - 临时隐藏 -->
+            <NCard title="操作" size="small" class="mb-16px" style="display: none">
+              <NSpace>
+                <NButton type="primary" @click="handleRetweet">转推</NButton>
+                <NButton @click="handleHook">Hook</NButton>
+                <NButton type="error" @click="handleClose">关闭工单</NButton>
+                <NButton type="success" @click="handleExecute">执行工单</NButton>
+              </NSpace>
+            </NCard>
+          </div>
+        </div>
+
+        <!-- 底部：标签页区域 - 已移除，整合到上方 -->
+      </div>
+
+      <div v-else class="min-h-200px flex-center">
+        <NEmpty description="工单不存在或已被删除" />
+      </div>
+    </NSpin>
+
+    <NModal v-model:show="actionVisible" preset="dialog" title="请输入附加信息">
+      <NInput v-model:value="confirmMsg" type="textarea" :autosize="{ minRows: 3, maxRows: 8 }" />
+      <template #action>
+        <NSpace>
+          <NButton @click="handleActionCancel">{{ confirmCancelText }}</NButton>
+          <NButton type="primary" :loading="loading" @click="handleActionOk">{{ confirmOkText }}</NButton>
+        </NSpace>
+      </template>
+    </NModal>
+
+    <NModal v-model:show="closeVisible" preset="dialog" title="请输入附加信息">
+      <NInput v-model:value="confirmMsg" type="textarea" :autosize="{ minRows: 3, maxRows: 5 }" />
+      <template #action>
+        <NSpace>
+          <NButton @click="handleCloseCancel">取消</NButton>
+          <NButton type="primary" :loading="loading" @click="handleCloseOk">确定</NButton>
+        </NSpace>
+      </template>
+    </NModal>
+
+    <NModal v-model:show="hookVisible" preset="dialog" title="HOOK工单" :style="{ width: '65%' }">
+      <NForm :model="hookForm">
+        <NFormItem label="工单ID"><NInput v-model:value="hookForm.order_id" disabled /></NFormItem>
+        <NFormItem label="当前工单"><NInput v-model:value="hookForm.title" disabled /></NFormItem>
+        <NFormItem label="DB类型"><NInput v-model:value="hookForm.db_type" disabled /></NFormItem>
+        <NFormItem label="当前库"><NInput v-model:value="hookForm.schema" disabled /></NFormItem>
+        <NFormItem label="审核状态">
+          <NSwitch v-model:value="resetToPending" :round="true" />
+        </NFormItem>
+        <NFormItem label="目标库">
+          <NCard>
+            <div v-for="(item, idx) in targetList" :key="idx" class="mb-8px">
+              <div class="grid grid-cols-12 gap-12px">
+                <div class="col-span-4">
+                  <NFormItem label="环境">
+                    <NSelect
+                      v-model:value="item.environment"
+                      :options="environmentOptions"
+                      clearable
+                      filterable
+                      @update:value="val => changeEnv(idx, val)"
+                    />
+                  </NFormItem>
+                </div>
+                <div class="col-span-4">
+                  <NFormItem label="实例">
+                    <NSelect
+                      v-model:value="item.instance_id"
+                      :options="instancesOptions[idx] || []"
+                      clearable
+                      filterable
+                      @update:value="val => changeInstance(idx, val)"
+                    />
+                  </NFormItem>
+                </div>
+                <div class="col-span-3">
+                  <NFormItem label="库名">
+                    <NSelect v-model:value="item.schema" :options="schemasOptions[idx] || []" clearable filterable />
+                  </NFormItem>
+                </div>
+                <div class="col-span-1 flex items-center">
+                  <NButton v-if="targetList.length > 1" tertiary @click="removeTarget(idx)">删除</NButton>
+                </div>
+              </div>
+            </div>
+            <NButton tertiary @click="addTarget">新增一行</NButton>
+          </NCard>
+        </NFormItem>
+      </NForm>
+      <template #action>
+        <NSpace>
+          <NButton @click="hideHookModal">取消</NButton>
+          <NButton type="primary" :loading="loading" @click="submitHook">确定</NButton>
+        </NSpace>
+      </template>
+    </NModal>
+  </div>
+</template>
 
 <style scoped>
 /* 页面容器样式 */
@@ -1270,11 +1370,21 @@ const submitHook = async () => {
   /* border-color: rgba(255, 255, 255, 0.08); */
 }
 
-.sci-fi-status-container.warning { --status-color: #f97316; }
-.sci-fi-status-container.success { --status-color: #22c55e; }
-.sci-fi-status-container.error { --status-color: #ef4444; }
-.sci-fi-status-container.info { --status-color: #3b82f6; }
-.sci-fi-status-container.default { --status-color: #9ca3af; }
+.sci-fi-status-container.warning {
+  --status-color: #f97316;
+}
+.sci-fi-status-container.success {
+  --status-color: #22c55e;
+}
+.sci-fi-status-container.error {
+  --status-color: #ef4444;
+}
+.sci-fi-status-container.info {
+  --status-color: #3b82f6;
+}
+.sci-fi-status-container.default {
+  --status-color: #9ca3af;
+}
 
 .sci-fi-status-container {
   /* border-color: var(--status-color); */
@@ -1288,7 +1398,7 @@ const submitHook = async () => {
   opacity: 0.8;
   letter-spacing: 1px;
   margin-bottom: 4px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
   text-transform: uppercase;
   font-weight: 600;
 }
@@ -1337,7 +1447,8 @@ const submitHook = async () => {
 }
 
 @keyframes ping {
-  75%, 100% {
+  75%,
+  100% {
     transform: scale(3);
     opacity: 0;
   }
@@ -1348,12 +1459,13 @@ const submitHook = async () => {
 }
 
 @keyframes pulse {
-  0%, 100% {
+  0%,
+  100% {
     opacity: 1;
     transform: scale(1);
   }
   50% {
-    opacity: .7;
+    opacity: 0.7;
     transform: scale(1.2);
   }
 }
@@ -1444,11 +1556,11 @@ const submitHook = async () => {
     flex-direction: column;
     gap: 24px;
   }
-  
+
   .grid-cols-4 {
     grid-template-columns: repeat(2, 1fr);
   }
-  
+
   .middle-content-container {
     grid-template-columns: 1fr 1.5fr;
     gap: 16px;
@@ -1459,25 +1571,25 @@ const submitHook = async () => {
   .grid-cols-4 {
     grid-template-columns: 1fr;
   }
-  
+
   .order-header-container {
     padding: 16px;
   }
-  
+
   .middle-content-container {
     grid-template-columns: 1fr;
     gap: 16px;
   }
-  
+
   .result-summary {
     padding: 12px;
   }
-  
+
   .task-stats {
     flex-direction: column;
     gap: 8px;
   }
-  
+
   .tab-content {
     padding: 12px 0;
   }
@@ -1487,15 +1599,15 @@ const submitHook = async () => {
   .order-header-container {
     padding: 12px;
   }
-  
+
   .info-item {
     padding: 8px 0;
   }
-  
+
   .progress-info {
     gap: 8px;
   }
-  
+
   .progress-item {
     gap: 6px;
   }

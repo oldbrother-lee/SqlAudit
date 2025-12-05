@@ -1,5 +1,6 @@
 import { createApp } from 'vue';
 import './plugins/assets';
+import VxeUI from 'vxe-pc-ui';
 import { setupAppVersionNotification, setupDayjs, setupIconifyOffline, setupLoading, setupNProgress } from './plugins';
 import { setupStore } from './store';
 import { setupRouter } from './router';
@@ -8,7 +9,6 @@ import App from './App.vue';
 import 'xe-utils';
 import VXETable from 'vxe-table';
 import 'vxe-table/lib/style.css';
-import VxeUI from 'vxe-pc-ui';
 import 'vxe-pc-ui/lib/style.css';
 
 async function setupApp() {

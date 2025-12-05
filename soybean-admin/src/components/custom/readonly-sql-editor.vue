@@ -1,32 +1,11 @@
-<template>
-  <div class="readonly-sql-editor">
-    <!-- SQL编辑器容器 -->
-    <div class="editor-container" ref="editorRoot" />
-    
-    <!-- 分页控制器 -->
-    <div v-if="showPagination" class="pagination-container">
-      <NPagination
-        v-model:page="currentPage"
-        :page-count="totalPages"
-        :page-size="pageSize"
-        :show-size-picker="true"
-        :page-sizes="[10, 20, 50, 100]"
-        show-quick-jumper
-        @update:page="handlePageChange"
-        @update:page-size="handlePageSizeChange"
-      />
-    </div>
-  </div>
-</template>
-
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch, computed, nextTick } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import { NPagination } from 'naive-ui';
 // CodeMirror 6 imports
 import { EditorState } from '@codemirror/state';
 import { EditorView, lineNumbers } from '@codemirror/view';
 import { sql } from '@codemirror/lang-sql';
-import { foldGutter, syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language';
+import { defaultHighlightStyle, foldGutter, syntaxHighlighting } from '@codemirror/language';
 import { oneDark } from '@codemirror/theme-one-dark';
 
 interface Props {
@@ -66,13 +45,13 @@ const pageSize = ref(props.pageSize);
 // 解析SQL语句（按分号分割）
 const sqlStatements = computed(() => {
   if (!props.sqlContent) return [];
-  
+
   // 按分号分割SQL语句，过滤空语句
   const statements = props.sqlContent
     .split(';')
     .map(stmt => stmt.trim())
     .filter(stmt => stmt.length > 0);
-  
+
   return statements;
 });
 
@@ -87,7 +66,7 @@ const currentPageStatements = computed(() => {
   if (!props.showPagination) {
     return sqlStatements.value;
   }
-  
+
   const start = (currentPage.value - 1) * pageSize.value;
   const end = start + pageSize.value;
   return sqlStatements.value.slice(start, end);
@@ -109,7 +88,7 @@ function getThemeExtension(theme: string) {
 // 初始化编辑器
 const initEditor = () => {
   if (editorView.value || !editorRoot.value) return;
-  
+
   const state = EditorState.create({
     doc: displayContent.value,
     extensions: [
@@ -125,15 +104,15 @@ const initEditor = () => {
         '&': {
           height: props.height,
           display: 'flex',
-          flexDirection: 'column',
+          flexDirection: 'column'
         },
         '.cm-content': {
           padding: '12px',
           flex: '1 1 auto',
-          minHeight: '0', // 允许内容收缩
+          minHeight: '0' // 允许内容收缩
         },
         '.cm-focused': {
-          outline: 'none',
+          outline: 'none'
         },
         '.cm-editor': {
           borderRadius: '4px',
@@ -150,52 +129,52 @@ const initEditor = () => {
           lineHeight: '1.6',
           overflow: 'auto', // 启用滚动
           flex: '1 1 auto', // 允许滚动区域伸缩
-          minHeight: '0', // 允许收缩
+          minHeight: '0' // 允许收缩
         },
         // 行号区域样式
         '.cm-gutters': {
           backgroundColor: 'var(--n-color)', // 跟随主题背景色
           color: 'var(--n-text-color-3)', // 弱文本颜色
-          borderRight: '1px solid var(--n-border-color)', // 右侧边框
+          borderRight: '1px solid var(--n-border-color)' // 右侧边框
         },
         '.cm-activeLineGutter': {
           backgroundColor: 'transparent',
-          color: 'var(--n-text-color-2)', // 激活行号颜色加深
+          color: 'var(--n-text-color-2)' // 激活行号颜色加深
         },
         // 自定义滚动条样式
         '.cm-scroller::-webkit-scrollbar': {
           width: '8px',
-          height: '8px',
+          height: '8px'
         },
         '.cm-scroller::-webkit-scrollbar-track': {
           background: 'var(--n-scrollbar-track-color, #f1f1f1)',
-          borderRadius: '4px',
+          borderRadius: '4px'
         },
         '.cm-scroller::-webkit-scrollbar-thumb': {
           background: 'var(--n-scrollbar-color, #c1c1c1)',
-          borderRadius: '4px',
+          borderRadius: '4px'
         },
         '.cm-scroller::-webkit-scrollbar-thumb:hover': {
-          background: 'var(--n-scrollbar-color-hover, #a8a8a8)',
+          background: 'var(--n-scrollbar-color-hover, #a8a8a8)'
         }
       })
     ]
   });
-  
+
   editorView.value = new EditorView({
     state,
     parent: editorRoot.value
   });
-}
+};
 
 // 更新编辑器内容
 function updateEditorContent() {
   const view = editorView.value;
   if (!view) return;
-  
+
   const newContent = displayContent.value;
   const currentContent = view.state.doc.toString();
-  
+
   if (currentContent !== newContent) {
     view.dispatch({
       changes: {
@@ -237,7 +216,7 @@ watch(
 // 监听主题变化
 watch(
   () => props.theme,
-  (newTheme) => {
+  newTheme => {
     const view = editorView.value;
     if (view) {
       // 重新创建编辑器以应用新主题
@@ -279,6 +258,27 @@ defineExpose({
   getCurrentStatements: () => currentPageStatements.value
 });
 </script>
+
+<template>
+  <div class="readonly-sql-editor">
+    <!-- SQL编辑器容器 -->
+    <div ref="editorRoot" class="editor-container" />
+
+    <!-- 分页控制器 -->
+    <div v-if="showPagination" class="pagination-container">
+      <NPagination
+        v-model:page="currentPage"
+        :page-count="totalPages"
+        :page-size="pageSize"
+        :show-size-picker="true"
+        :page-sizes="[10, 20, 50, 100]"
+        show-quick-jumper
+        @update:page="handlePageChange"
+        @update:page-size="handlePageSizeChange"
+      />
+    </div>
+  </div>
+</template>
 
 <style scoped>
 .readonly-sql-editor {

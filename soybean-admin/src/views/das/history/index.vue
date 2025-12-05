@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { ref, onMounted, computed, h } from 'vue';
+import { computed, h, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { NButton, NTag } from 'naive-ui';
 
 const { t } = useI18n();
 
@@ -48,10 +49,11 @@ const filteredHistory = computed(() => {
   if (!searchKeyword.value) {
     return historyList.value;
   }
-  return historyList.value.filter(item => 
-    item.sql_content.toLowerCase().includes(searchKeyword.value.toLowerCase()) ||
-    item.database_name.toLowerCase().includes(searchKeyword.value.toLowerCase()) ||
-    item.table_name.toLowerCase().includes(searchKeyword.value.toLowerCase())
+  return historyList.value.filter(
+    item =>
+      item.sql_content.toLowerCase().includes(searchKeyword.value.toLowerCase()) ||
+      item.database_name.toLowerCase().includes(searchKeyword.value.toLowerCase()) ||
+      item.table_name.toLowerCase().includes(searchKeyword.value.toLowerCase())
   );
 });
 
@@ -123,7 +125,7 @@ const columns: any[] = [
     render(row: any) {
       const type = getStatusType(row.status);
       const text = getStatusText(row.status);
-      return h('span', { class: `n-tag n-tag--${type} n-tag--small` }, text);
+      return h(NTag, { type: type as any, size: 'small' }, { default: () => text });
     }
   },
   {
@@ -141,28 +143,25 @@ const columns: any[] = [
     title: '操作',
     key: 'actions',
     render(row: any) {
-      return h(
-        'div',
-        { style: 'display:flex; gap:8px;' },
-        [
-          h(
-            'button',
-            {
-              class: 'n-button n-button--primary n-button--small',
-              onClick: () => reuseQuery(row)
-            },
-            '复用'
-          ),
-          h(
-            'button',
-            {
-              class: 'n-button n-button--small',
-              onClick: () => addToFavorites(row)
-            },
-            '收藏'
-          )
-        ]
-      );
+      return h('div', { style: 'display:flex; gap:8px;' }, [
+        h(
+          NButton,
+          {
+            type: 'primary',
+            size: 'small',
+            onClick: () => reuseQuery(row)
+          },
+          { default: () => '复用' }
+        ),
+        h(
+          NButton,
+          {
+            size: 'small',
+            onClick: () => addToFavorites(row)
+          },
+          { default: () => '收藏' }
+        )
+      ]);
     }
   }
 ];
@@ -175,12 +174,7 @@ const columns: any[] = [
         <NSpace justify="space-between">
           <span>历史查询</span>
           <NSpace>
-            <NInput
-              v-model:value="searchKeyword"
-              placeholder="搜索SQL、数据库或表名"
-              clearable
-              style="width: 200px"
-            >
+            <NInput v-model:value="searchKeyword" placeholder="搜索SQL、数据库或表名" clearable style="width: 200px">
               <template #prefix>
                 <SvgIcon icon="i-carbon-search" />
               </template>
@@ -194,7 +188,7 @@ const columns: any[] = [
           </NSpace>
         </NSpace>
       </template>
-      
+
       <NSpin :show="loading">
         <div v-if="filteredHistory.length === 0" class="empty-state">
           <NEmpty description="暂无历史查询记录" />
@@ -212,5 +206,10 @@ const columns: any[] = [
   height: 100%;
 }
 
-.history-list, .history-item, .sql-content, .execution-info { display: none; }
+.history-list,
+.history-item,
+.sql-content,
+.execution-info {
+  display: none;
+}
 </style>

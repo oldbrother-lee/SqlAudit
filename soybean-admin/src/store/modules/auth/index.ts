@@ -99,9 +99,9 @@ export const useAuthStore = defineStore(SetupStoreId.Auth, () => {
   async function login(userName: string, password: string, redirect = true) {
     startLoading();
     const res = await fetchLogin(userName, password);
-    console.log(res.response)
-    const loginToken = res.response
-    const {data : token, error } = loginToken
+    console.log(res.response);
+    const loginToken = res.response;
+    const { data: token, error } = loginToken;
     // const { data: loginToken, error } = await fetchLogin(userName, password);
     // console.log(loginToken)
     if (!error) {
@@ -166,7 +166,7 @@ export const useAuthStore = defineStore(SetupStoreId.Auth, () => {
 
     if (hasToken) {
       // const pass = await getUserInfo();
-      const pass = true
+      const pass = true;
 
       if (!pass) {
         resetStore();

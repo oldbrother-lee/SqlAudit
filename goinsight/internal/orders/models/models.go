@@ -32,6 +32,7 @@ type InsightOrderRecords struct {
 	InstanceID       uuid.UUID       `gorm:"type:char(36);comment:关联insight_db_config的instance_id;index" json:"instance_id"`
 	Schema           string          `gorm:"type:varchar(128);not null;default:'';comment:库名" json:"schema"`
 	Progress         models.EnumType `gorm:"type:ENUM('待审核', '已驳回', '已批准', '执行中', '已关闭', '已完成', '已复核');default:'待审核';comment:工单进度" json:"progress"`
+	ExecuteResult    string          `gorm:"type:varchar(32);default:'';comment:执行结果(success,error,warning)" json:"execute_result"`
 	FixVersion       string          `gorm:"type:varchar(128);not null;default:'';comment:上线版本;index" json:"fix_version"`
 	Content          string          `gorm:"type:text;null;comment:工单内容" json:"content"`
 	ExportFileFormat models.EnumType `gorm:"type:ENUM('XLSX', 'CSV');default:'XLSX';comment:导出文件格式" json:"export_file_format"`

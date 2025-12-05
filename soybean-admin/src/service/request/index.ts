@@ -29,7 +29,10 @@ export const request = createFlatRequest<App.Service.Response, RequestInstanceSt
       // you can change this logic by yourself via `VITE_SERVICE_SUCCESS_CODE`, support comma separated values like "0000,200"
       const code = String(response.data.code ?? '');
       const envVal = import.meta.env.VITE_SERVICE_SUCCESS_CODE || '';
-      const successCodes = envVal.split(',').map(c => c.trim()).filter(Boolean);
+      const successCodes = envVal
+        .split(',')
+        .map(c => c.trim())
+        .filter(Boolean);
       if (successCodes.length > 0) {
         return successCodes.includes(code);
       }
@@ -189,7 +192,10 @@ export const requestRaw = createFlatRequest<any, RequestInstanceState>(
       // you can change this logic by yourself via `VITE_SERVICE_SUCCESS_CODE`, support comma separated values like "0000,200"
       const code = String(response.data.code ?? '');
       const envVal = import.meta.env.VITE_SERVICE_SUCCESS_CODE || '';
-      const successCodes = envVal.split(',').map(c => c.trim()).filter(Boolean);
+      const successCodes = envVal
+        .split(',')
+        .map(c => c.trim())
+        .filter(Boolean);
       if (successCodes.length > 0) {
         return successCodes.includes(code);
       }

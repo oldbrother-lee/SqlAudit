@@ -38,7 +38,7 @@ export function setupElegantRouter() {
       if (constantRoutes.includes(key)) {
         meta.constant = true;
       }
-      
+
       if (key === 'das_orders-detail') {
         meta.hideInMenu = true;
         meta.activeMenu = 'das_orders-list';

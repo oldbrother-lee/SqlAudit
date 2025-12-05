@@ -386,32 +386,35 @@ type ExecuteAllTaskService struct {
 	Username string
 }
 
-func (s *ExecuteAllTaskService) Run() (err error) {
+func (s *ExecuteAllTaskService) Run() (msg string, msgType string, err error) {
 	// 当工单的状态不为已批准或执行中的时候，禁止执行任务
 	if err = checkOrderStatus(s.OrderID, s.Username); err != nil {
-		return err
+		return "", "", err
 	}
 	// 判断当前工单的所有任务中是否存在执行中的任务，如果存在，不执行
 	if !checkTasksProgressIsDoing(s.OrderID) {
-		return errors.New("当前有任务正在执行中，请先等待执行完成")
+		return "", "", errors.New("当前有任务正在执行中，请先等待执行完成")
 	}
 	//  判断当前工单的所有任务中是否存在已暂停的任务，如果存在，不执行；可手动执行单个任务
 	if !checkTasksProgressIsPause(s.OrderID) {
-		return errors.New("当前有任务正在执行中，请先等待执行完成")
+		return "", "", errors.New("当前有任务正在执行中，请先等待执行完成")
 	}
 	// 更新当前工单进度为执行中
 	if err := global.App.DB.Model(&ordersModels.InsightOrderRecords{}).
 		Where("order_id=?", s.OrderID).
 		Update("progress", "执行中").Error; err != nil {
 		global.App.Log.Error(err)
-		return err
+		return "", "", err
 	}
 	// 获取工单所有的任务
 	var tasks []ordersModels.InsightOrderTasks
 	tx := global.App.DB.Table("`insight_order_tasks`").Where("order_id=?", s.OrderID).Scan(&tasks)
 	if tx.RowsAffected == 0 {
-		return errors.New("任务记录不存在")
+		return "", "", errors.New("任务记录不存在")
 	}
+
+	var executedCount, successCount, failCount int
+
 	// 执行任务
 	for _, task := range tasks {
 		// 跳过已完成的任务
@@ -419,12 +422,14 @@ func (s *ExecuteAllTaskService) Run() (err error) {
 			continue
 		}
 
+		executedCount++
+
 		// 更新当前任务进度为执行中
 		if err := tx.Model(&ordersModels.InsightOrderTasks{}).
 			Where("task_id=?", task.TaskID).
 			Update("progress", "执行中").Error; err != nil {
 			global.App.Log.Error(err)
-			return err
+			return "", "", err
 		}
 
 		// 执行任务
@@ -432,6 +437,7 @@ func (s *ExecuteAllTaskService) Run() (err error) {
 
 		// 返回错误，更新任务状态
 		if err != nil {
+			failCount++
 			var taskProgress string
 			// 错误类型断言，可以添加更多状态
 			switch err.(type) {
@@ -446,6 +452,7 @@ func (s *ExecuteAllTaskService) Run() (err error) {
 				Where("task_id=?", task.TaskID).
 				Updates(map[string]interface{}{"progress": taskProgress, "result": data})
 		} else {
+			successCount++
 			global.App.DB.Model(&ordersModels.InsightOrderTasks{}).
 				Where("task_id=?", task.TaskID).
 				Updates(map[string]interface{}{"progress": "已完成", "result": data})
@@ -456,5 +463,27 @@ func (s *ExecuteAllTaskService) Run() (err error) {
 	}
 	// 更新工单状态为已完成
 	updateOrderStatusToFinish(s.OrderID)
-	return nil
+
+	var msgResult, typeResult string
+
+	if executedCount == 0 {
+		msgResult = "没有需要执行的任务"
+		typeResult = "warning"
+	} else if successCount == executedCount {
+		msgResult = "执行成功"
+		typeResult = "success"
+	} else if failCount == executedCount {
+		msgResult = "执行失败"
+		typeResult = "error"
+	} else {
+		msgResult = "执行有失败，请关注执行结果"
+		typeResult = "warning"
+	}
+
+	// 更新执行结果
+	global.App.DB.Model(&ordersModels.InsightOrderRecords{}).
+		Where("order_id=?", s.OrderID).
+		Update("execute_result", typeResult)
+
+	return msgResult, typeResult, nil
 }

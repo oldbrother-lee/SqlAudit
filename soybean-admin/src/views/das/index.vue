@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, defineAsyncComponent } from 'vue';
+import { defineAsyncComponent, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 
 const { t } = useI18n();
@@ -31,12 +31,7 @@ const HistoryComponent = defineAsyncComponent(() => import('./modules/history/in
 <template>
   <NCard :bordered="false" class="card-wrapper">
     <NTabs v-model:value="activeTab" type="line" size="small">
-      <NTabPane
-        v-for="tab in tabs"
-        :key="tab.key"
-        :name="tab.key"
-        :tab="tab.label"
-      >
+      <NTabPane v-for="tab in tabs" :key="tab.key" :name="tab.key" :tab="tab.label">
         <template #tab>
           <NSpace align="center" :size="4">
             <SvgIcon :icon="tab.icon" class="text-16px" />

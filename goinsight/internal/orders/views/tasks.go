@@ -105,7 +105,12 @@ func ExecuteSingleTaskView(c *gin.Context) {
 // 批量执行任务
 func ExecuteAllTaskView(c *gin.Context) {
 	claims := jwt.ExtractClaims(c)
-	username := claims["id"].(string)
+	var username string
+	if v, ok := claims["id"].(string); ok {
+		username = v
+	} else {
+		username = "unknown"
+	}
 	var form *forms.ExecuteAllTaskForm = &forms.ExecuteAllTaskForm{}
 	if err := c.ShouldBind(&form); err == nil {
 		service := services.ExecuteAllTaskService{
@@ -113,11 +118,12 @@ func ExecuteAllTaskView(c *gin.Context) {
 			C:                  c,
 			Username:           username,
 		}
-		if err := service.Run(); err != nil {
+		msg, msgType, err := service.Run()
+		if err != nil {
 			response.Fail(c, err.Error())
 			return
 		}
-		response.Success(c, nil, "执行完成")
+		response.Success(c, gin.H{"type": msgType}, msg)
 	} else {
 		response.ValidateFail(c, err.Error())
 	}

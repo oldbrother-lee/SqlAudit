@@ -1,25 +1,40 @@
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, watch, h, onUnmounted } from 'vue';
+import { computed, h, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { NCard, NGrid, NGi, NForm, NFormItem, NInput, NSelect, NSwitch, NButton, NSpace, NAlert, useMessage } from 'naive-ui';
-import { format } from 'sql-formatter';
 import {
-  fetchOrdersEnvironments,
-  fetchOrdersInstances,
-  fetchOrdersSchemas,
-  fetchOrdersUsers,
-  fetchSyntaxCheck,
-  fetchCreateOrder
-} from '@/service/api/orders';
-import { NDataTable, NTag, NText } from 'naive-ui';
+  NAlert,
+  NButton,
+  NCard,
+  NDataTable,
+  NForm,
+  NFormItem,
+  NGi,
+  NGrid,
+  NInput,
+  NSelect,
+  NSpace,
+  NSwitch,
+  NTag,
+  NText,
+  useMessage
+} from 'naive-ui';
 import type { PaginationProps } from 'naive-ui';
+import { format } from 'sql-formatter';
 // CodeMirror 6 imports (align with SQL 查询页)
 import { EditorState } from '@codemirror/state';
 import { EditorView, keymap, lineNumbers } from '@codemirror/view';
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
 import { sql } from '@codemirror/lang-sql';
-import { foldGutter, foldKeymap, syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language';
+import { defaultHighlightStyle, foldGutter, foldKeymap, syntaxHighlighting } from '@codemirror/language';
 import { autocompletion, completionKeymap } from '@codemirror/autocomplete';
+import {
+  fetchCreateOrder,
+  fetchOrdersEnvironments,
+  fetchOrdersInstances,
+  fetchOrdersSchemas,
+  fetchOrdersUsers,
+  fetchSyntaxCheck
+} from '@/service/api/orders';
 
 const route = useRoute();
 const router = useRouter();
@@ -43,7 +58,7 @@ interface FormModel {
   approver: string[]; // username list
   executor: string[]; // username list
   reviewer: string[]; // username list
-  cc: string[];       // username list
+  cc: string[]; // username list
   content: string;
 }
 
@@ -110,9 +125,6 @@ async function loadUsers() {
   users.value = (res as any)?.data ?? [];
 }
 
-
-
-
 // 编辑器设置：右侧改为与 SQL 查询页一致的 CodeMirror
 const editorRoot = ref<HTMLElement | null>(null);
 const editorView = ref<EditorView | null>(null);
@@ -127,15 +139,9 @@ function initEditor() {
       sql({ upperCaseKeywords: true }),
       syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
       history(),
-      keymap.of([
-        ...defaultKeymap,
-        ...historyKeymap,
-        ...foldKeymap,
-        ...completionKeymap,
-        indentWithTab
-      ]),
+      keymap.of([...defaultKeymap, ...historyKeymap, ...foldKeymap, ...completionKeymap, indentWithTab]),
       autocompletion({ activateOnTyping: true }),
-      EditorView.updateListener.of((v) => {
+      EditorView.updateListener.of(v => {
         if (v.docChanged) {
           formModel.content = v.state.doc.toString();
         }
@@ -146,14 +152,17 @@ function initEditor() {
 }
 
 // 外部更新（如格式化）时同步到编辑器
-watch(() => formModel.content, (val) => {
-  const view = editorView.value;
-  if (!view) return;
-  const cur = view.state.doc.toString();
-  if (cur !== (val || '')) {
-    view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: val || '' } });
+watch(
+  () => formModel.content,
+  val => {
+    const view = editorView.value;
+    if (!view) return;
+    const cur = view.state.doc.toString();
+    if (cur !== (val || '')) {
+      view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: val || '' } });
+    }
   }
-});
+);
 
 const leftContentRef = ref<HTMLElement | null>(null);
 const leftContentHeight = ref<number>(0);
@@ -166,7 +175,7 @@ onMounted(async () => {
   initEditor();
   // 观察左侧卡片内容高度变化，右侧编辑器按此高度限制
   if (leftContentRef.value) {
-    leftResizeObserver = new ResizeObserver((entries) => {
+    leftResizeObserver = new ResizeObserver(entries => {
       const entry = entries[0];
       if (entry) {
         leftContentHeight.value = Math.round(entry.contentRect.height);
@@ -218,7 +227,9 @@ function formatSQL() {
 const syntaxRows = ref<any[]>([]);
 const syntaxStatus = ref<number | null>(null);
 const showFingerprint = ref(false);
-const visibleSyntaxColumns = computed(() => syntaxColumns.filter((col: any) => col.key !== 'finger_id' || showFingerprint.value));
+const visibleSyntaxColumns = computed(() =>
+  syntaxColumns.filter((col: any) => col.key !== 'finger_id' || showFingerprint.value)
+);
 function isPass(row: any) {
   return row?.level === 'INFO' && (!row?.summary || row.summary.length === 0);
 }
@@ -228,10 +239,15 @@ const pagination = reactive<PaginationProps>({
   showSizePicker: true,
   itemCount: 0,
   pageSizes: [10, 20, 50, 100],
-  onUpdatePage: (page: number) => { pagination.page = page; },
-  onUpdatePageSize: (size: number) => { pagination.pageSize = size; pagination.page = 1; }
+  onUpdatePage: (page: number) => {
+    pagination.page = page;
+  },
+  onUpdatePageSize: (size: number) => {
+    pagination.pageSize = size;
+    pagination.page = 1;
+  }
 });
-watch(syntaxRows, (rows) => {
+watch(syntaxRows, rows => {
   pagination.itemCount = rows.length;
   pagination.page = 1;
 });
@@ -240,9 +256,21 @@ const syntaxColumns = [
   { title: '影响行数', key: 'affected_rows', width: 90 },
   { title: '类型', key: 'type', width: 90 },
   { title: '指纹', key: 'finger_id', width: 120 },
-  { title: '信息提示', key: 'summary', width: 300, ellipsis: { tooltip: true }, render: (row: any) => (row.summary && row.summary.length ? row.summary.join('；') : '—') },
+  {
+    title: '信息提示',
+    key: 'summary',
+    width: 300,
+    ellipsis: { tooltip: true },
+    render: (row: any) => (row.summary && row.summary.length ? row.summary.join('；') : '—')
+  },
   { title: 'SQL', key: 'query', width: 500, ellipsis: { tooltip: true } },
-  { title: '检测结果', key: 'result', width: 100, render: (row: any) => h(NTag, { type: isPass(row) ? 'success' : 'error' }, { default: () => (isPass(row) ? '通过' : '失败') }) }
+  {
+    title: '检测结果',
+    key: 'result',
+    width: 100,
+    render: (row: any) =>
+      h(NTag, { type: isPass(row) ? 'success' : 'error' }, { default: () => (isPass(row) ? '通过' : '失败') })
+  }
 ];
 async function syntaxCheck() {
   if (!formModel.content) {
@@ -348,7 +376,10 @@ async function submitOrder() {
   }
 }
 
-watch(() => route.path, () => inferSqlTypeFromPath());
+watch(
+  () => route.path,
+  () => inferSqlTypeFromPath()
+);
 </script>
 
 <template>
@@ -361,49 +392,119 @@ watch(() => route.path, () => inferSqlTypeFromPath());
             <div ref="leftContentRef">
               <NForm label-placement="left" :label-width="96">
                 <NFormItem label="标题">
-                <NInput v-model:value="formModel.title" placeholder="请输入工单标题" />
-              </NFormItem>
-              <NFormItem label="备注">
-                <NInput v-model:value="formModel.remark" type="textarea" :autosize="{ minRows: 2, maxRows: 6 }" placeholder="请输入工单需求或备注" />
-              </NFormItem>
-              <NFormItem label="限制访问">
-                <NSwitch v-model:value="formModel.isRestrictAccess" />
-              </NFormItem>
-              <NFormItem label="DB类型">
-                <NSelect v-model:value="formModel.dbType" :options="[{ label: 'MySQL', value: 'MySQL' }, { label: 'TiDB', value: 'TiDB' }]" @update:value="onDBTypeChange" />
-              </NFormItem>
-              <NFormItem label="环境">
-                <NSelect v-model:value="formModel.environment" :options="environments.map((e: any) => ({ label: e.name, value: e.id }))" filterable clearable placeholder="请选择工单环境" @update:value="onEnvironmentChange" />
-              </NFormItem>
-              <NFormItem label="实例">
-                <NSelect v-model:value="formModel.instanceId" :options="instances.map((i: any) => ({ label: i.remark, value: i.instance_id }))" filterable clearable placeholder="请选择数据库实例" @update:value="onInstanceChange" />
-              </NFormItem>
-              <NFormItem label="库名">
-                <NSelect v-model:value="formModel.schema" :options="schemas.map((s: any) => ({ label: s.schema, value: s.schema }))" filterable clearable placeholder="请选择数据库" />
-              </NFormItem>
-              <NFormItem v-if="isExportOrder" label="文件格式">
-                <NSelect v-model:value="formModel.exportFileFormat" :options="[{ label: 'XLSX', value: 'XLSX' }, { label: 'CSV', value: 'CSV' }]" />
-              </NFormItem>
-              <NFormItem label="审核人">
-                <NSelect v-model:value="formModel.approver" multiple filterable clearable placeholder="请选择工单审核人"
-                  :options="users.map((u: any) => ({ label: `${u.username} ${u.nick_name || ''}`, value: u.username }))" />
-              </NFormItem>
-              <NFormItem label="执行人">
-                <NSelect v-model:value="formModel.executor" multiple filterable clearable placeholder="请选择工单执行人"
-                  :options="users.map((u: any) => ({ label: `${u.username} ${u.nick_name || ''}`, value: u.username }))" />
-              </NFormItem>
-              <NFormItem label="复核人">
-                <NSelect v-model:value="formModel.reviewer" multiple filterable clearable placeholder="请选择工单复核人"
-                  :options="users.map((u: any) => ({ label: `${u.username} ${u.nick_name || ''}`, value: u.username }))" />
-              </NFormItem>
-              <NFormItem label="抄送人">
-                <NSelect v-model:value="formModel.cc" multiple filterable clearable placeholder="请选择工单抄送人"
-                  :options="users.map((u: any) => ({ label: `${u.username} ${u.nick_name || ''}`, value: u.username }))" />
-              </NFormItem>
-              <NFormItem>
-                <NButton type="primary" :loading="loading" @click="submitOrder">提交</NButton>
-              </NFormItem>
-            </NForm>
+                  <NInput v-model:value="formModel.title" placeholder="请输入工单标题" />
+                </NFormItem>
+                <NFormItem label="备注">
+                  <NInput
+                    v-model:value="formModel.remark"
+                    type="textarea"
+                    :autosize="{ minRows: 2, maxRows: 6 }"
+                    placeholder="请输入工单需求或备注"
+                  />
+                </NFormItem>
+                <NFormItem label="限制访问">
+                  <NSwitch v-model:value="formModel.isRestrictAccess" />
+                </NFormItem>
+                <NFormItem label="DB类型">
+                  <NSelect
+                    v-model:value="formModel.dbType"
+                    :options="[
+                      { label: 'MySQL', value: 'MySQL' },
+                      { label: 'TiDB', value: 'TiDB' }
+                    ]"
+                    @update:value="onDBTypeChange"
+                  />
+                </NFormItem>
+                <NFormItem label="环境">
+                  <NSelect
+                    v-model:value="formModel.environment"
+                    :options="environments.map((e: any) => ({ label: e.name, value: e.id }))"
+                    filterable
+                    clearable
+                    placeholder="请选择工单环境"
+                    @update:value="onEnvironmentChange"
+                  />
+                </NFormItem>
+                <NFormItem label="实例">
+                  <NSelect
+                    v-model:value="formModel.instanceId"
+                    :options="instances.map((i: any) => ({ label: i.remark, value: i.instance_id }))"
+                    filterable
+                    clearable
+                    placeholder="请选择数据库实例"
+                    @update:value="onInstanceChange"
+                  />
+                </NFormItem>
+                <NFormItem label="库名">
+                  <NSelect
+                    v-model:value="formModel.schema"
+                    :options="schemas.map((s: any) => ({ label: s.schema, value: s.schema }))"
+                    filterable
+                    clearable
+                    placeholder="请选择数据库"
+                  />
+                </NFormItem>
+                <NFormItem v-if="isExportOrder" label="文件格式">
+                  <NSelect
+                    v-model:value="formModel.exportFileFormat"
+                    :options="[
+                      { label: 'XLSX', value: 'XLSX' },
+                      { label: 'CSV', value: 'CSV' }
+                    ]"
+                  />
+                </NFormItem>
+                <NFormItem label="审核人">
+                  <NSelect
+                    v-model:value="formModel.approver"
+                    multiple
+                    filterable
+                    clearable
+                    placeholder="请选择工单审核人"
+                    :options="
+                      users.map((u: any) => ({ label: `${u.username} ${u.nick_name || ''}`, value: u.username }))
+                    "
+                  />
+                </NFormItem>
+                <NFormItem label="执行人">
+                  <NSelect
+                    v-model:value="formModel.executor"
+                    multiple
+                    filterable
+                    clearable
+                    placeholder="请选择工单执行人"
+                    :options="
+                      users.map((u: any) => ({ label: `${u.username} ${u.nick_name || ''}`, value: u.username }))
+                    "
+                  />
+                </NFormItem>
+                <NFormItem label="复核人">
+                  <NSelect
+                    v-model:value="formModel.reviewer"
+                    multiple
+                    filterable
+                    clearable
+                    placeholder="请选择工单复核人"
+                    :options="
+                      users.map((u: any) => ({ label: `${u.username} ${u.nick_name || ''}`, value: u.username }))
+                    "
+                  />
+                </NFormItem>
+                <NFormItem label="抄送人">
+                  <NSelect
+                    v-model:value="formModel.cc"
+                    multiple
+                    filterable
+                    clearable
+                    placeholder="请选择工单抄送人"
+                    :options="
+                      users.map((u: any) => ({ label: `${u.username} ${u.nick_name || ''}`, value: u.username }))
+                    "
+                  />
+                </NFormItem>
+                <NFormItem>
+                  <NButton type="primary" :loading="loading" @click="submitOrder">提交</NButton>
+                </NFormItem>
+              </NForm>
             </div>
           </NCard>
         </NGi>
@@ -421,20 +522,29 @@ watch(() => route.path, () => inferSqlTypeFromPath());
                 </NSpace>
               </div>
               <!-- 替换 textarea 为与 SQL 查询一致的 CodeMirror 编辑器 -->
-              <div class="code-editor-container" ref="editorRoot" />
+              <div ref="editorRoot" class="code-editor-container" />
             </div>
           </NCard>
         </NGi>
       </NGrid>
     </NCard>
-    <NCard v-if="syntaxRows.length" title="语法检查结果" style="margin-top: 12px;">
-        <NDataTable :columns="visibleSyntaxColumns" :data="syntaxRows" :pagination="pagination" size="small" single-line table-layout="fixed" />
-      </NCard>
+    <NCard v-if="syntaxRows.length" title="语法检查结果" style="margin-top: 12px">
+      <NDataTable
+        :columns="visibleSyntaxColumns"
+        :data="syntaxRows"
+        :pagination="pagination"
+        size="small"
+        single-line
+        table-layout="fixed"
+      />
+    </NCard>
   </div>
 </template>
 
 <style scoped>
-:deep(.n-card .n-card__content) { padding: 12px; }
+:deep(.n-card .n-card__content) {
+  padding: 12px;
+}
 /* 参考 SQL 查询页的编辑器样式 */
 .editor-card :deep(.n-card__content) {
   /* 右侧卡片内容作为外层容器，不再直接拉伸 */

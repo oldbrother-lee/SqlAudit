@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue';
+import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 
 interface Props {
   modelValue: string;
@@ -30,13 +30,13 @@ const isInitializing = ref(false);
 // 初始化编辑器
 const initEditor = async () => {
   if (!editorRef.value || isInitializing.value) return;
-  
+
   isInitializing.value = true;
 
   try {
     // 动态导入Monaco Editor
     const monaco = await import('monaco-editor');
-    
+
     // 创建编辑器 - 使用最简单的配置
     editor.value = monaco.editor.create(editorRef.value, {
       value: props.modelValue || '',
@@ -69,7 +69,6 @@ const initEditor = async () => {
 
     isEditorReady.value = true;
     emit('ready', editor.value);
-
   } catch (error) {
     console.error('Failed to initialize Monaco Editor:', error);
   } finally {
@@ -79,25 +78,31 @@ const initEditor = async () => {
 
 // 监听modelValue变化 - 添加防抖
 let updateTimeout: any = null;
-watch(() => props.modelValue, (newValue) => {
-  if (editor.value && editor.value.getValue() !== newValue) {
-    if (updateTimeout) {
-      clearTimeout(updateTimeout);
-    }
-    updateTimeout = setTimeout(() => {
-      if (editor.value) {
-        editor.value.setValue(newValue || '');
+watch(
+  () => props.modelValue,
+  newValue => {
+    if (editor.value && editor.value.getValue() !== newValue) {
+      if (updateTimeout) {
+        clearTimeout(updateTimeout);
       }
-    }, 50);
+      updateTimeout = setTimeout(() => {
+        if (editor.value) {
+          editor.value.setValue(newValue || '');
+        }
+      }, 50);
+    }
   }
-});
+);
 
 // 监听主题变化
-watch(() => props.theme, (newTheme) => {
-  if (editor.value && newTheme) {
-    editor.value.updateOptions({ theme: newTheme });
+watch(
+  () => props.theme,
+  newTheme => {
+    if (editor.value && newTheme) {
+      editor.value.updateOptions({ theme: newTheme });
+    }
   }
-});
+);
 
 onMounted(() => {
   nextTick(() => {
@@ -123,11 +128,7 @@ defineExpose({
 </script>
 
 <template>
-  <div 
-    ref="editorRef" 
-    class="monaco-editor-container"
-    :style="{ height: height }"
-  />
+  <div ref="editorRef" class="monaco-editor-container" :style="{ height: height }" />
 </template>
 
 <style scoped>
@@ -138,4 +139,3 @@ defineExpose({
   overflow: hidden;
 }
 </style>
-

@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { ref, onMounted, h } from 'vue';
+import { h, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { NButton } from 'naive-ui';
 
 const { t } = useI18n();
 
@@ -68,28 +69,26 @@ const columns: any[] = [
     title: '操作',
     key: 'actions',
     render(row: any) {
-      return h(
-        'div',
-        { style: 'display:flex; gap:8px;' },
-        [
-          h(
-            'button',
-            {
-              class: 'n-button n-button--primary n-button--small',
-              onClick: () => useFavorite(row)
-            },
-            '使用'
-          ),
-          h(
-            'button',
-            {
-              class: 'n-button n-button--error n-button--small',
-              onClick: () => deleteFavorite(row.id)
-            },
-            '删除'
-          )
-        ]
-      );
+      return h('div', { style: 'display:flex; gap:8px;' }, [
+        h(
+          NButton,
+          {
+            type: 'primary',
+            size: 'small',
+            onClick: () => useFavorite(row)
+          },
+          { default: () => '使用' }
+        ),
+        h(
+          NButton,
+          {
+            type: 'error',
+            size: 'small',
+            onClick: () => deleteFavorite(row.id)
+          },
+          { default: () => '删除' }
+        )
+      ]);
     }
   }
 ];
@@ -109,7 +108,7 @@ const columns: any[] = [
           </NButton>
         </NSpace>
       </template>
-      
+
       <NSpin :show="loading">
         <div v-if="favorites.length === 0" class="empty-state">
           <NEmpty description="暂无收藏SQL" />

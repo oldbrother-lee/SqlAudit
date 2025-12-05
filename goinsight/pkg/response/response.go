@@ -26,7 +26,12 @@ type PaginationResponse struct {
 func writeResponse(c *gin.Context, code string, data interface{}, msg string) {
 	claims := jwt.ExtractClaims(c)
 	requestID := requestid.Get(c)
-	username := claims["id"].(string)
+	var username string
+	if v, ok := claims["id"].(string); ok {
+		username = v
+	} else {
+		username = "unknown"
+	}
 
 	if code == "0000" {
 		global.App.Log.WithField("request_id", requestID).WithField("username", username).Info(msg)
@@ -40,7 +45,12 @@ func writeResponse(c *gin.Context, code string, data interface{}, msg string) {
 func writeResponseWithPagination(c *gin.Context, code string, data interface{}, msg string, total int64) {
 	claims := jwt.ExtractClaims(c)
 	requestID := requestid.Get(c)
-	username := claims["id"].(string)
+	var username string
+	if v, ok := claims["id"].(string); ok {
+		username = v
+	} else {
+		username = "unknown"
+	}
 
 	if code == "0000" {
 		global.App.Log.WithField("request_id", requestID).WithField("username", username).Info(msg)

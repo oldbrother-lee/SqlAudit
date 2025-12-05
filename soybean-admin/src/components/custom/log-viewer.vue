@@ -1,15 +1,9 @@
-<template>
-  <div class="log-viewer">
-    <div ref="editorRoot" class="editor-container"></div>
-  </div>
-</template>
-
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch } from 'vue';
+import { onMounted, onUnmounted, ref, watch } from 'vue';
 import { EditorState } from '@codemirror/state';
 import { EditorView, lineNumbers } from '@codemirror/view';
 import { sql } from '@codemirror/lang-sql';
-import { foldGutter, syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language';
+import { defaultHighlightStyle, foldGutter, syntaxHighlighting } from '@codemirror/language';
 import { oneDark } from '@codemirror/theme-one-dark';
 
 interface Props {
@@ -39,7 +33,7 @@ const initEditor = () => {
     EditorView.lineWrapping,
     EditorView.theme({
       '&': { height: props.height },
-      '.cm-scroller': { 
+      '.cm-scroller': {
         overflow: 'auto',
         fontFamily: 'v-mono, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
         lineHeight: '1.6',
@@ -78,25 +72,25 @@ const initEditor = () => {
 
 watch(
   () => props.content,
-  (newContent) => {
+  newContent => {
     if (editorView.value) {
       const currentDoc = editorView.value.state.doc.toString();
       if (currentDoc !== newContent) {
         // Replace entire content for simplicity, or we could append if we managed state differently.
         // But since prop is the full content, we replace.
         // Optimization: if newContent starts with currentDoc, just append the difference.
-        
+
         const transaction: any = {};
-        
+
         if (newContent.startsWith(currentDoc)) {
-            const appendText = newContent.slice(currentDoc.length);
-            transaction.changes = { from: currentDoc.length, insert: appendText };
+          const appendText = newContent.slice(currentDoc.length);
+          transaction.changes = { from: currentDoc.length, insert: appendText };
         } else {
-            transaction.changes = { from: 0, to: currentDoc.length, insert: newContent };
+          transaction.changes = { from: 0, to: currentDoc.length, insert: newContent };
         }
-        
+
         editorView.value.dispatch(transaction);
-        
+
         // Scroll to bottom
         setTimeout(() => {
           if (editorView.value) {
@@ -120,6 +114,12 @@ onUnmounted(() => {
   }
 });
 </script>
+
+<template>
+  <div class="log-viewer">
+    <div ref="editorRoot" class="editor-container"></div>
+  </div>
+</template>
 
 <style scoped>
 .log-viewer {
