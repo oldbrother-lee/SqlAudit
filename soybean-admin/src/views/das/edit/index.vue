@@ -991,7 +991,7 @@ onUnmounted(() => {
 
 <template>
   <NCard size="small" class="das-page" :content-style="{ padding: '12px' }">
-    <NGrid cols="24" x-gap="12" y-gap="12">
+    <NGrid cols="24" x-gap="12" y-gap="12" style="height: 100%">
       <NGi v-if="showLeftPanel" span="7">
         <NCard size="small" title="数据库选择" :segmented="{ content: true }" class="das-left-card">
           <template #header-extra>
@@ -1054,21 +1054,21 @@ onUnmounted(() => {
         </NCard>
       </NGi>
       <NGi :span="rightSpan">
-        <NSpace vertical :size="12">
+        <div style="display: flex; flex-direction: column; height: 100%; gap: 12px">
           <NCard v-if="!showLeftPanel" size="small" class="das-ghost-card" :bordered="false">
             <NButton quaternary size="small" @click="foldLeft">
               <template #icon><SvgIcon icon="line-md:menu-fold-right" /></template>
               展开数据库面板
             </NButton>
           </NCard>
-          <NCard size="small" class="das-editor-shell" :segmented="{ content: true }">
+          <NCard size="small" class="das-editor-shell" :segmented="{ content: true }" style="flex: 1; min-height: 0; display: flex; flex-direction: column;" :content-style="{ flex: 1, overflow: 'auto' }">
             <template #header>
               <NSpace justify="space-between" align="center" class="das-shell-header">
                 <div class="das-title">
                   <span>SQL 工作台</span>
                   <NTag size="small" type="success">{{ currentSchemaLabel }}</NTag>
                 </div>
-                <NSpace :size="8" wrap>
+                <!-- <NSpace :size="8" wrap>
                   <NButton quaternary size="small" @click="gotoFavorite">
                     <template #icon><SvgIcon icon="carbon:star" /></template>
                     收藏 SQL
@@ -1085,7 +1085,7 @@ onUnmounted(() => {
                     <template #icon><SvgIcon icon="carbon:renew" /></template>
                     刷新表
                   </NButton>
-                </NSpace>
+                </NSpace> -->
               </NSpace>
             </template>
             <NTabs
@@ -1105,27 +1105,17 @@ onUnmounted(() => {
                 :closable="pane.closable"
               >
                 <NSpace vertical :size="12">
-                  <NCard size="small" :segmented="{ content: true }" class="das-editor-card">
-                    <template #header>
-                      <NSpace justify="space-between" align="center">
-                        <div class="das-subtitle">
-                          <SvgIcon icon="carbon:terminal" class="mr-4px" />
-                          SQL 编辑器
-                        </div>
-                        <NSpace :size="6">
-                          <NButton quaternary size="tiny" @click="formatSQL(pane)">
-                            <template #icon><SvgIcon icon="carbon:code" /></template>
-                            格式化
-                          </NButton>
-                        </NSpace>
-                      </NSpace>
-                    </template>
+                  <div>
                     <div class="code-editor-container" :ref="(el) => setEditorRef(pane, el as unknown as HTMLElement)" />
                     <div class="das-editor-actions">
                       <NSpace :size="6" wrap>
                         <NButton size="tiny" type="primary" :loading="pane.loading" @click="executeSQL(pane)">
                           <template #icon><SvgIcon icon="carbon:flash" /></template>
                           执行 SQL
+                        </NButton>
+                        <NButton size="tiny" @click="formatSQL(pane)">
+                          <template #icon><SvgIcon icon="carbon:code" /></template>
+                          格式化
                         </NButton>
                         <NButton size="tiny" @click="loadDBDictData">
                           <template #icon><SvgIcon icon="carbon:document" /></template>
@@ -1141,7 +1131,7 @@ onUnmounted(() => {
                         </NButton>
                       </NSpace>
                     </div>
-                  </NCard>
+                  </div>
                   <NCard size="small" :segmented="{ content: true }" class="das-result-card">
                     <template #header>
                       <NSpace justify="space-between" align="center">
@@ -1205,7 +1195,7 @@ onUnmounted(() => {
               </NTabPane>
             </NTabs>
           </NCard>
-        </NSpace>
+        </div>
       </NGi>
     </NGrid>
   </NCard>
@@ -1216,7 +1206,7 @@ onUnmounted(() => {
   height: calc(100vh - 120px);
 }
 .das-left-card {
-  height: calc(100vh - 144px);
+  height: 100%;
 }
 .das-tree-scroll {
   max-height: calc(100vh - 260px);
@@ -1232,9 +1222,6 @@ onUnmounted(() => {
   align-items: center;
   gap: 6px;
   font-weight: 600;
-}
-.das-editor-card {
-  padding-bottom: 4px;
 }
 .das-editor-actions {
   display: flex;
