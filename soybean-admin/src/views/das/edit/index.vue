@@ -764,15 +764,60 @@ const executeSQL = (pane?: EditorPane) => {
   }
 };
 
-const formatSQL = (pane?: EditorPane) => {
+const formatSQL = (pane?: EditorPane, mode: 'format' | 'minify' = 'format') => {
   const p = pane || currentPane.value;
-  saveCodeToCache(p);
-  
+  const view = editorViews.value[p.key];
+
+  // Helper functions
+  const doMinify = (text: string) => text.replace(/\s+/g, ' ').trim();
+  const doFormat = (text: string) => format(text, { language: 'mysql' });
+  const processText = (text: string) => mode === 'minify' ? doMinify(text) : doFormat(text);
+  const successMsg = mode === 'minify' ? '压缩成功' : '格式化成功';
+  const failMsg = mode === 'minify' ? '压缩失败' : '格式化失败，请检查SQL语法';
+
+  if (!view) {
+    try {
+      p.sql = processText(p.sql);
+      window.$message?.success(successMsg);
+      saveCodeToCache(p);
+    } catch (error) {
+      window.$message?.warning(failMsg);
+    }
+    return;
+  }
+
+  const ranges = view.state.selection.ranges;
+  const hasSelection = ranges.some((r) => !r.empty);
+
   try {
-    p.sql = format(p.sql, { language: 'mysql' });
-    window.$message?.success('格式化成功');
+    if (hasSelection) {
+      const changes = ranges
+        .filter((r) => !r.empty)
+        .map((r) => {
+          const text = view.state.sliceDoc(r.from, r.to);
+          return {
+            from: r.from,
+            to: r.to,
+            insert: processText(text)
+          };
+        });
+
+      view.dispatch({ changes });
+      window.$message?.success(mode === 'minify' ? '已压缩选中内容' : '已格式化选中内容');
+    } else {
+      const text = view.state.doc.toString();
+      const processed = processText(text);
+
+      view.dispatch({
+        changes: { from: 0, to: text.length, insert: processed }
+      });
+      window.$message?.success(successMsg);
+    }
+    
+    // 保存到缓存（等待 updateListener 更新 p.sql 后）
+    nextTick(() => saveCodeToCache(p));
   } catch (error) {
-    window.$message?.warning('格式化失败，请检查SQL语法');
+    window.$message?.warning(failMsg);
   }
 };
 
@@ -993,7 +1038,7 @@ onUnmounted(() => {
   <NCard size="small" class="das-page" :content-style="{ padding: '12px' }">
     <NGrid cols="24" x-gap="12" y-gap="12" style="height: 100%">
       <NGi v-if="showLeftPanel" span="7">
-        <NCard size="small" title="数据库选择" :segmented="{ content: true }" class="das-left-card">
+        <NCard size="small" title="数据库选择" :segmented="{ content: true }" class="das-left-card" :content-style="{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }">
           <template #header-extra>
             <NSpace :size="6">
               <NTooltip trigger="hover" placement="top" :show-arrow="false">
@@ -1014,27 +1059,31 @@ onUnmounted(() => {
               </NTooltip>
             </NSpace>
           </template>
-          <NSpace vertical :size="10">
-            <NSelect
-              v-model:value="bindTitle"
-              :options="schemas.map((s: any) => ({
-                label: `${s.remark || s.instanceName || s.hostname}:${s.schema}`,
-                value: `${s.instance_id}#${s.schema}#${s.db_type}`
-              }))"
-              filterable
-              clearable
-              placeholder="请选择库名..."
-              @update:value="getTables"
-            />
-            <NInput
-              v-if="showSearch"
-              v-model:value="leftTableSearch"
-              clearable
-              placeholder="输入要搜索的表名..."
-              @keyup.enter="onSearch(leftTableSearch)"
-            />
-            <NText depth="3" class="das-hint">搜索不到需要的表？试试刷新按钮。</NText>
-            <NScrollbar class="das-tree-scroll">
+          <div style="flex-shrink: 0; padding-bottom: 10px;">
+            <NSpace vertical :size="10">
+              <NSelect
+                v-model:value="bindTitle"
+                :options="schemas.map((s: any) => ({
+                  label: `${s.remark || s.instanceName || s.hostname}:${s.schema}`,
+                  value: `${s.instance_id}#${s.schema}#${s.db_type}`
+                }))"
+                filterable
+                clearable
+                placeholder="请选择库名..."
+                @update:value="getTables"
+              />
+              <NInput
+                v-if="showSearch"
+                v-model:value="leftTableSearch"
+                clearable
+                placeholder="输入要搜索的表名..."
+                @keyup.enter="onSearch(leftTableSearch)"
+              />
+              <NText depth="3" class="das-hint">搜索不到需要的表？试试刷新按钮。</NText>
+            </NSpace>
+          </div>
+          <div style="flex: 1; min-height: 0; overflow: hidden;">
+            <NScrollbar style="height: 100%">
               <NSpin :show="treeLoading">
                 <NTree
                   :data="filteredTreeData"
@@ -1050,7 +1099,7 @@ onUnmounted(() => {
                 />
               </NSpin>
             </NScrollbar>
-          </NSpace>
+          </div>
         </NCard>
       </NGi>
       <NGi :span="rightSpan">
@@ -1113,10 +1162,15 @@ onUnmounted(() => {
                           <template #icon><SvgIcon icon="carbon:flash" /></template>
                           执行 SQL
                         </NButton>
-                        <NButton size="tiny" @click="formatSQL(pane)">
-                          <template #icon><SvgIcon icon="carbon:code" /></template>
-                          格式化
-                        </NButton>
+                        <NTooltip trigger="hover" :show-arrow="false">
+                          <template #trigger>
+                            <NButton size="tiny" @click="(e) => formatSQL(pane, e.shiftKey ? 'minify' : 'format')">
+                              <template #icon><SvgIcon icon="carbon:code" /></template>
+                              格式化
+                            </NButton>
+                          </template>
+                          点击格式化，按住 Shift 点击压缩
+                        </NTooltip>
                         <NButton size="tiny" @click="loadDBDictData">
                           <template #icon><SvgIcon icon="carbon:document" /></template>
                           数据字典
@@ -1208,9 +1262,6 @@ onUnmounted(() => {
 .das-left-card {
   height: 100%;
 }
-.das-tree-scroll {
-  max-height: calc(100vh - 260px);
-}
 .das-shell-header .das-title {
   display: inline-flex;
   align-items: center;
@@ -1273,6 +1324,9 @@ onUnmounted(() => {
 }
 .code-editor-container :deep(.cm-activeLine) {
   background-color: rgba(0, 0, 0, 0.03);
+}
+.code-editor-container :deep(.cm-editor.cm-focused) {
+  outline: none;
 }
 /* 左侧 NTree 自定义节点样式 */
 :deep(.n-tree .n-tree-node) {
