@@ -1,10 +1,12 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, nextTick, onUnmounted, h, watch, resolveComponent } from 'vue';
+import { ref, computed, onMounted, nextTick, onUnmounted, h, watch, resolveComponent, markRaw, toRaw } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { format } from 'sql-formatter';
 import { fetchExecuteMySQLQuery, fetchExecuteClickHouseQuery, fetchSchemas, fetchTables, fetchUserGrants, fetchDBDict, fetchTableInfo } from '@/service/api/das';
 import TableColumnSetting from '@/components/advanced/table-column-setting.vue';
 import TableHeaderOperation from '@/components/advanced/table-header-operation.vue';
+import History from '../history/index.vue';
+import Favorite from '../favorite/index.vue';
 // CodeMirror 6 imports
 import { EditorState, Compartment } from '@codemirror/state';
 import { EditorView, keymap, lineNumbers } from '@codemirror/view';
@@ -177,6 +179,7 @@ interface EditorPane {
     pageSize: number;
     total: number;
   };
+  bottomActiveTab?: string;
 }
 
 const panes = ref<EditorPane[]>([
@@ -191,7 +194,8 @@ const panes = ref<EditorPane[]>([
     result: null,
     loading: false,
     responseMsg: '',
-    pagination: { currentPage: 1, pageSize: 20, total: 0 }
+    pagination: { currentPage: 1, pageSize: 20, total: 0 },
+    bottomActiveTab: 'result'
   }
 ]);
 
@@ -279,7 +283,7 @@ function createEditor(pane: EditorPane, el: HTMLElement) {
     ]
   });
   const view = new EditorView({ state, parent: el });
-  editorViews.value[pane.key] = view;
+  editorViews.value[pane.key] = markRaw(view);
 }
 
 function setEditorRef(pane: EditorPane, el: HTMLElement | null) {
@@ -545,7 +549,8 @@ const add = () => {
     result: null,
     loading: false,
     responseMsg: '',
-    pagination: { currentPage: 1, pageSize: defaultPageSize, total: 0 }
+    pagination: { currentPage: 1, pageSize: defaultPageSize, total: 0 },
+    bottomActiveTab: 'result'
   });
   activeKey.value = activeKeyValue.toString();
 };
@@ -648,6 +653,9 @@ const executeMySQLQuery = async (pane: EditorPane, data: any) => {
     updateTableColumnChecks(pane);
     initPagination(pane);
     
+    // Switch to result tab
+    pane.bottomActiveTab = 'result';
+    
     window.$message?.success('执行成功');
   } catch (error: any) {
     resMsgs.push('结果: 执行失败');
@@ -704,6 +712,9 @@ const executeClickHouseQuery = async (pane: EditorPane, data: any) => {
     updateTableColumnChecks(pane);
     initPagination(pane);
     
+    // Switch to result tab
+    pane.bottomActiveTab = 'result';
+
     window.$message?.success('执行成功');
   } catch (error: any) {
     resMsgs.push('结果: 执行失败');
@@ -723,7 +734,7 @@ const executeClickHouseQuery = async (pane: EditorPane, data: any) => {
 
 // 获取选中的 SQL，如果没有选区则返回全文
 function getSqlToExecute(p: EditorPane): string {
-  const view = editorViews.value[p.key];
+  const view = toRaw(editorViews.value[p.key]);
   if (view) {
     const ranges = view.state.selection.ranges;
     for (const r of ranges) {
@@ -764,13 +775,36 @@ const executeSQL = (pane?: EditorPane) => {
   }
 };
 
+const handleReuseSQL = (pane: EditorPane, sql: string) => {
+  if (!sql) return;
+  const view = toRaw(editorViews.value[pane.key]);
+  if (view) {
+    const current = view.state.doc.toString();
+    const separator = current ? '\n\n' : '';
+    const insertPos = current.length;
+    const insertText = `${separator}${sql}`;
+
+    const tr = view.state.update({
+      changes: { from: insertPos, insert: insertText },
+      selection: { anchor: insertPos + separator.length, head: insertPos + insertText.length },
+      scrollIntoView: true
+    });
+    view.dispatch(tr);
+
+    // 立即执行选中的 SQL
+    executeSQL(pane);
+  } else {
+    pane.sql = pane.sql ? `${pane.sql}\n\n${sql}` : sql;
+  }
+};
+
 const formatSQL = (pane?: EditorPane, mode: 'format' | 'minify' = 'format') => {
   const p = pane || currentPane.value;
-  const view = editorViews.value[p.key];
+  const view = toRaw(editorViews.value[p.key]);
 
   // Helper functions
   const doMinify = (text: string) => text.replace(/\s+/g, ' ').trim();
-  const doFormat = (text: string) => format(text, { language: 'mysql' });
+  const doFormat = (text: string) => format(text, { language: 'mysql', keywordCase: 'upper' });
   const processText = (text: string) => mode === 'minify' ? doMinify(text) : doFormat(text);
   const successMsg = mode === 'minify' ? '压缩成功' : '格式化成功';
   const failMsg = mode === 'minify' ? '压缩失败' : '格式化失败，请检查SQL语法';
@@ -1156,7 +1190,14 @@ onUnmounted(() => {
                 <NSpace vertical :size="12">
                   <div>
                     <div class="code-editor-container" :ref="(el) => setEditorRef(pane, el as unknown as HTMLElement)" />
-                    <div class="das-editor-actions">
+                  </div>
+                  <NTabs
+                    v-model:value="pane.bottomActiveTab"
+                    type="line"
+                    size="small"
+                    class="das-result-tabs"
+                  >
+                    <template #suffix>
                       <NSpace :size="6" wrap>
                         <NButton size="tiny" type="primary" :loading="pane.loading" @click="executeSQL(pane)">
                           <template #icon><SvgIcon icon="carbon:flash" /></template>
@@ -1175,76 +1216,86 @@ onUnmounted(() => {
                           <template #icon><SvgIcon icon="carbon:document" /></template>
                           数据字典
                         </NButton>
-                        <NButton size="tiny" @click="gotoFavorite">
+                        <!-- <NButton size="tiny" @click="gotoFavorite">
                           <template #icon><SvgIcon icon="carbon:star" /></template>
                           收藏 SQL
                         </NButton>
                         <NButton size="tiny" @click="gotoHistory">
                           <template #icon><SvgIcon icon="carbon:time" /></template>
                           历史查询
-                        </NButton>
-                      </NSpace>
-                    </div>
-                  </div>
-                  <NCard size="small" :segmented="{ content: true }" class="das-result-card">
-                    <template #header>
-                      <NSpace justify="space-between" align="center">
-                        <div class="das-subtitle">
-                          <SvgIcon icon="carbon:data-base" class="mr-4px" />
-                          查询结果
-                        </div>
-                        <TableColumnSetting v-model:columns="tableColumnChecks" />
+                        </NButton> -->
                       </NSpace>
                     </template>
-                    <div v-if="pane.result">
-                      <div v-if="getTableData(pane).length > 0">
-                        <vxe-table
-                          :data="getPagedTableData(pane)"
-                          border
-                          stripe
-                          :height="400"
-                          :column-config="{ resizable: true }"
-                          :resizable-config="{ showDragTip: false }"
-                          :scroll-y="{ enabled: true }"
-                          show-overflow
-                        >
-                          <vxe-column
-                            v-for="col in getVisibleColumns(pane)"
-                            :key="col.key"
-                            :field="col.key"
-                            :title="col.title"
-                            :min-width="col.minWidth || 120"
-                          />
-                        </vxe-table>
-                        <div class="das-result-meta">
-                          <div class="das-result-stat">
-                            <SvgIcon icon="carbon:checkmark" class="text-16px text-#18a058" />
-                            <NText type="success">执行成功</NText>
-                            <NText>当前返回 [{{ getTableData(pane).length }}] 行</NText>
-                            <SvgIcon icon="carbon:time" class="ml-8px text-16px text-#2080f0" />
-                            <NText type="info">耗时 [{{ pane.result?.duration ?? '-' }}]</NText>
+                    <NTabPane name="my_sql" tab="我的 SQL">
+                      <div style="padding: 12px 0;">
+                        <NTabs type="line" size="small" class="das-mysql-tabs">
+                          <NTabPane name="history" tab="历史查询">
+                            <History :embedded="true" @reuse="(sql) => handleReuseSQL(pane, sql)" />
+                          </NTabPane>
+                          <NTabPane name="favorite" tab="收藏 SQL">
+                            <Favorite :embedded="true" @reuse="(sql) => handleReuseSQL(pane, sql)" />
+                          </NTabPane>
+                        </NTabs>
+                      </div>
+                    </NTabPane>
+                    <NTabPane name="result" tab="执行结果">
+                      <div class="das-result-pane">
+                        <div class="das-result-toolbar" style="margin-bottom: 8px;">
+                          <NSpace justify="end">
+                            <TableColumnSetting v-model:columns="tableColumnChecks" />
+                          </NSpace>
+                        </div>
+                        <div v-if="pane.result">
+                          <div v-if="getTableData(pane).length > 0">
+                            <vxe-table
+                              :data="getPagedTableData(pane)"
+                              border
+                              stripe
+                              :height="400"
+                              :column-config="{ resizable: true }"
+                              :resizable-config="{ showDragTip: false }"
+                              :scroll-y="{ enabled: true }"
+                              show-overflow
+                            >
+                              <vxe-column
+                                v-for="col in getVisibleColumns(pane)"
+                                :key="col.key"
+                                :field="col.key"
+                                :title="col.title"
+                                :min-width="col.minWidth || 120"
+                              />
+                            </vxe-table>
+                            <div class="das-result-meta">
+                              <div class="das-result-stat">
+                                <SvgIcon icon="carbon:checkmark" class="text-16px text-#18a058" />
+                                <NText type="success">执行成功</NText>
+                                <NText>当前返回 [{{ getTableData(pane).length }}] 行</NText>
+                                <SvgIcon icon="carbon:time" class="ml-8px text-16px text-#2080f0" />
+                                <NText type="info">耗时 [{{ pane.result?.duration ?? '-' }}]</NText>
+                              </div>
+                              <NPagination
+                                v-model:page="pane.pagination!.currentPage"
+                                v-model:page-size="pane.pagination!.pageSize"
+                                :item-count="pane.pagination?.total ?? getTableData(pane).length"
+                                :page-sizes="pageSizes"
+                                show-size-picker
+                                size="small"
+                                :page-slot="9"
+                                @update:page="(p) => onPageChange(pane, p, pane.pagination!.pageSize)"
+                                @update:page-size="(s) => onPageChange(pane, pane.pagination!.currentPage, s)"
+                              />
+                            </div>
                           </div>
-                          <NPagination
-                            v-model:page="pane.pagination!.currentPage"
-                            v-model:page-size="pane.pagination!.pageSize"
-                            :item-count="pane.pagination?.total ?? getTableData(pane).length"
-                            :page-sizes="pageSizes"
-                            show-size-picker
-                            size="small"
-                            :page-slot="9"
-                            @update:page="(p) => onPageChange(pane, p, pane.pagination!.pageSize)"
-                            @update:page-size="(s) => onPageChange(pane, pane.pagination!.currentPage, s)"
-                          />
+                          <div v-else class="das-empty-holder">
+                            <NEmpty description="查询无结果" />
+                          </div>
+                        </div>
+                        <div v-else class="das-empty-holder">
+                          <NEmpty description="暂无查询结果" />
                         </div>
                       </div>
-                      <div v-else class="das-empty-holder">
-                        <NEmpty description="查询无结果" />
-                      </div>
-                    </div>
-                    <div v-else class="das-empty-holder">
-                      <NEmpty description="暂无查询结果" />
-                    </div>
-                  </NCard>
+                    </NTabPane>
+                  </NTabs>
                 </NSpace>
               </NTabPane>
             </NTabs>
@@ -1425,5 +1476,60 @@ onUnmounted(() => {
 }
 :deep(.n-tree-node-content__prefix) {
   margin-right: 0px !important;
+}
+</style>
+
+<style>
+/* vxe-table Dark Mode Support - Global Overrides */
+html.dark .vxe-table--render-default {
+  color: rgba(255, 255, 255, 0.82) !important;
+  background-color: transparent !important;
+}
+
+html.dark .vxe-table--header-wrapper,
+html.dark .vxe-table--body-wrapper,
+html.dark .vxe-table--footer-wrapper {
+  background-color: #18181c !important;
+}
+
+html.dark .vxe-header--row .vxe-header--column,
+html.dark .vxe-body--row .vxe-body--column,
+html.dark .vxe-footer--row .vxe-footer--column {
+  background-color: #18181c !important;
+  background-image: none !important;
+  color: rgba(255, 255, 255, 0.82) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.09) !important;
+  border-right: 1px solid rgba(255, 255, 255, 0.09) !important;
+}
+
+/* Hover effect */
+html.dark .vxe-body--row.row--hover,
+html.dark .vxe-body--row.row--hover .vxe-body--column {
+  background-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+/* Stripe effect */
+html.dark .vxe-body--row.row--stripe,
+html.dark .vxe-body--row.row--stripe .vxe-body--column {
+  background-color: rgba(255, 255, 255, 0.04) !important;
+}
+
+/* Borders */
+html.dark .vxe-table--border-line {
+  border-color: rgba(255, 255, 255, 0.09) !important;
+}
+
+/* Scrollbar */
+html.dark .vxe-table--body-wrapper::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+  background-color: #18181c;
+}
+html.dark .vxe-table--body-wrapper::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+}
+html.dark .vxe-table--body-wrapper::-webkit-scrollbar-track {
+  background-color: #18181c;
 }
 </style>

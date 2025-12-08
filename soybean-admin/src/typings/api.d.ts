@@ -173,23 +173,22 @@ declare namespace Api {
 
     interface Favorite {
       id: number;
+      created_at: string;
+      updated_at: string;
+      username: string;
       title: string;
-      sql: string;
-      description?: string;
-      createTime: string;
+      sqltext: string;
     }
 
     interface CreateFavoriteRequest {
       title: string;
-      sql: string;
-      description?: string;
+      sqltext: string;
     }
 
     interface UpdateFavoriteRequest {
       id: number;
       title: string;
-      sql: string;
-      description?: string;
+      sqltext: string;
     }
 
     interface SchemaGrant {

@@ -1,7 +1,16 @@
 <script setup lang="ts">
-import { computed, h, onMounted, ref } from 'vue';
+import { computed, h, onMounted, reactive, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { NButton, NTag } from 'naive-ui';
+import { fetchCreateFavorite, fetchHistory } from '@/service/api/das';
+
+const props = defineProps<{
+  embedded?: boolean;
+}>();
+
+const emit = defineEmits<{
+  (e: 'reuse', sql: string): void;
+}>();
 
 const { t } = useI18n();
 
@@ -10,39 +19,23 @@ const loading = ref(false);
 const historyList = ref<any[]>([]);
 const searchKeyword = ref('');
 
-// 模拟数据
-const mockHistory = [
-  {
-    id: 1,
-    sql_content: 'SELECT * FROM users WHERE created_at >= "2024-01-01"',
-    database_name: 'production',
-    table_name: 'users',
-    execution_time: 120,
-    rows_affected: 1500,
-    status: 'success',
-    executed_at: '2024-01-15 16:30:00'
+const pagination = reactive({
+  page: 1,
+  pageSize: 10,
+  showSizePicker: true,
+  pageSizes: [10, 20, 50, 100],
+  onChange: (page: number) => {
+    pagination.page = page;
   },
-  {
-    id: 2,
-    sql_content: 'UPDATE orders SET status = "completed" WHERE id = 12345',
-    database_name: 'production',
-    table_name: 'orders',
-    execution_time: 45,
-    rows_affected: 1,
-    status: 'success',
-    executed_at: '2024-01-15 15:20:00'
-  },
-  {
-    id: 3,
-    sql_content: 'SELECT COUNT(*) FROM products WHERE category_id = 5',
-    database_name: 'analytics',
-    table_name: 'products',
-    execution_time: 89,
-    rows_affected: 0,
-    status: 'error',
-    executed_at: '2024-01-15 14:10:00'
+  onUpdatePageSize: (pageSize: number) => {
+    pagination.pageSize = pageSize;
+    pagination.page = 1;
   }
-];
+});
+
+watch(searchKeyword, () => {
+  pagination.page = 1;
+});
 
 // 计算属性
 const filteredHistory = computed(() => {
@@ -51,9 +44,9 @@ const filteredHistory = computed(() => {
   }
   return historyList.value.filter(
     item =>
-      item.sql_content.toLowerCase().includes(searchKeyword.value.toLowerCase()) ||
-      item.database_name.toLowerCase().includes(searchKeyword.value.toLowerCase()) ||
-      item.table_name.toLowerCase().includes(searchKeyword.value.toLowerCase())
+      item.sqltext.toLowerCase().includes(searchKeyword.value.toLowerCase()) ||
+      item.schema.toLowerCase().includes(searchKeyword.value.toLowerCase()) ||
+      item.tables.toLowerCase().includes(searchKeyword.value.toLowerCase())
   );
 });
 
@@ -61,9 +54,12 @@ const filteredHistory = computed(() => {
 const loadHistory = async () => {
   loading.value = true;
   try {
-    // 模拟API调用
-    await new Promise(resolve => setTimeout(resolve, 500));
-    historyList.value = mockHistory;
+    const { data, error } = await fetchHistory();
+    if (!error && data) {
+      historyList.value = data;
+    } else {
+      window.$message?.error('加载历史查询失败');
+    }
   } catch (error) {
     console.error('Failed to load history:', error);
     window.$message?.error('加载历史查询失败');
@@ -73,15 +69,26 @@ const loadHistory = async () => {
 };
 
 const reuseQuery = (history: any) => {
-  console.log('Reuse query:', history.sql_content);
+  if (props.embedded) {
+    emit('reuse', history.sqltext);
+    return;
+  }
+  console.log('Reuse query:', history.sqltext);
   window.$message?.success('SQL已复制到剪贴板');
-  navigator.clipboard.writeText(history.sql_content);
+  navigator.clipboard.writeText(history.sqltext);
 };
 
 const addToFavorites = async (history: any) => {
   try {
-    // 模拟添加到收藏
-    window.$message?.success('已添加到收藏');
+    const { error } = await fetchCreateFavorite({
+      sqltext: history.sqltext,
+      title: `From History: ${history.schema}.${history.tables}`
+    });
+    if (!error) {
+      window.$message?.success('已添加到收藏');
+    } else {
+      window.$message?.error('添加收藏失败');
+    }
   } catch (error) {
     console.error('Failed to add to favorites:', error);
     window.$message?.error('添加收藏失败');
@@ -123,40 +130,53 @@ const columns: any[] = [
     title: '状态',
     key: 'status',
     render(row: any) {
-      const type = getStatusType(row.status);
-      const text = getStatusText(row.status);
+      const status = row.error_msg ? 'error' : 'success';
+      const type = getStatusType(status);
+      const text = getStatusText(status);
       return h(NTag, { type: type as any, size: 'small' }, { default: () => text });
     }
   },
   {
     title: '库.表',
     key: 'dbTable',
+    width: 200,
     render(row: any) {
-      return `${row.database_name}.${row.table_name}`;
+      return `${row.tables}`;
     }
   },
-  { title: 'SQL', key: 'sql_content' },
-  { title: '执行时间(ms)', key: 'execution_time' },
-  { title: '影响行数', key: 'rows_affected' },
-  { title: '执行时间点', key: 'executed_at' },
+  {
+    title: 'SQL',
+    key: 'sqltext',
+    width: 400,
+    ellipsis: {
+      tooltip: true
+    }
+  },
+  { title: '耗时(ms)', key: 'duration', width: 120, ellipsis: { tooltip: true } },
+  { title: '影响行数', key: 'return_rows', width: 100, ellipsis: { tooltip: true } },
+  { title: '执行时间', key: 'created_at', width: 180, ellipsis: { tooltip: true } },
   {
     title: '操作',
     key: 'actions',
+    width: 130,
+    fixed: 'right',
     render(row: any) {
       return h('div', { style: 'display:flex; gap:8px;' }, [
         h(
           NButton,
           {
             type: 'primary',
-            size: 'small',
+            size: 'tiny',
+            ghost: true,
             onClick: () => reuseQuery(row)
           },
-          { default: () => '复用' }
+          { default: () => '执行' }
         ),
         h(
           NButton,
           {
-            size: 'small',
+            size: 'tiny',
+            quaternary: true,
             onClick: () => addToFavorites(row)
           },
           { default: () => '收藏' }
@@ -169,19 +189,19 @@ const columns: any[] = [
 
 <template>
   <div class="history-container">
-    <NCard :bordered="false" size="small">
+    <NCard :bordered="!embedded" size="small" :content-style="{ padding: embedded ? '0' : '' }">
       <template #header>
-        <NSpace justify="space-between">
-          <span>历史查询</span>
-          <NSpace>
-            <NInput v-model:value="searchKeyword" placeholder="搜索SQL、数据库或表名" clearable style="width: 200px">
+        <NSpace justify="space-between" align="center">
+          <span v-if="!embedded">历史查询</span>
+          <NSpace size="small">
+            <NInput v-model:value="searchKeyword" placeholder="搜索" clearable size="tiny" style="width: 180px">
               <template #prefix>
-                <SvgIcon icon="i-carbon-search" />
+                <SvgIcon icon="carbon:search" />
               </template>
             </NInput>
-            <NButton type="primary" size="small" @click="loadHistory">
+            <NButton type="primary" size="tiny" ghost @click="loadHistory">
               <template #icon>
-                <SvgIcon icon="i-carbon-refresh" />
+                <SvgIcon icon="carbon:renew" />
               </template>
               刷新
             </NButton>
@@ -194,7 +214,7 @@ const columns: any[] = [
           <NEmpty description="暂无历史查询记录" />
         </div>
         <div v-else>
-          <NDataTable :columns="columns" :data="filteredHistory" size="small" />
+          <NDataTable :columns="columns" :data="filteredHistory" size="small" :pagination="pagination" :scroll-x="1200" />
         </div>
       </NSpin>
     </NCard>

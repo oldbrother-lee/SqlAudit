@@ -2,6 +2,15 @@
 import { h, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { NButton } from 'naive-ui';
+import { fetchDeleteFavorite, fetchFavorites } from '@/service/api/das';
+
+const props = defineProps<{
+  embedded?: boolean;
+}>();
+
+const emit = defineEmits<{
+  (e: 'reuse', sql: string): void;
+}>();
 
 const { t } = useI18n();
 
@@ -9,29 +18,16 @@ const { t } = useI18n();
 const loading = ref(false);
 const favorites = ref<any[]>([]);
 
-// 模拟数据
-const mockFavorites = [
-  {
-    id: 1,
-    sql_content: 'SELECT * FROM users WHERE status = 1',
-    description: '查询活跃用户',
-    created_at: '2024-01-15 10:30:00'
-  },
-  {
-    id: 2,
-    sql_content: 'SELECT COUNT(*) FROM orders WHERE date >= CURDATE()',
-    description: '今日订单统计',
-    created_at: '2024-01-15 14:20:00'
-  }
-];
-
 // 方法
 const loadFavorites = async () => {
   loading.value = true;
   try {
-    // 模拟API调用
-    await new Promise(resolve => setTimeout(resolve, 500));
-    favorites.value = mockFavorites;
+    const { data, error } = await fetchFavorites();
+    if (!error && data) {
+      favorites.value = data;
+    } else {
+      window.$message?.error('加载收藏SQL失败');
+    }
   } catch (error) {
     console.error('Failed to load favorites:', error);
     window.$message?.error('加载收藏SQL失败');
@@ -41,16 +37,24 @@ const loadFavorites = async () => {
 };
 
 const useFavorite = (favorite: any) => {
-  console.log('Use favorite SQL:', favorite.sql_content);
+  if (props.embedded) {
+    emit('reuse', favorite.sqltext);
+    return;
+  }
+  console.log('Use favorite SQL:', favorite.sqltext);
   window.$message?.success('SQL已复制到剪贴板');
-  navigator.clipboard.writeText(favorite.sql_content);
+  navigator.clipboard.writeText(favorite.sqltext);
 };
 
 const deleteFavorite = async (id: number) => {
   try {
-    // 模拟删除操作
-    favorites.value = favorites.value.filter(item => item.id !== id);
-    window.$message?.success('删除成功');
+    const { error } = await fetchDeleteFavorite(id);
+    if (!error) {
+      favorites.value = favorites.value.filter(item => item.id !== id);
+      window.$message?.success('删除成功');
+    } else {
+      window.$message?.error('删除失败');
+    }
   } catch (error) {
     console.error('Failed to delete favorite:', error);
     window.$message?.error('删除失败');
@@ -62,28 +66,32 @@ onMounted(() => {
 });
 
 const columns: any[] = [
-  { title: '描述', key: 'description' },
-  { title: 'SQL', key: 'sql_content' },
-  { title: '创建时间', key: 'created_at' },
+  { title: 'SQL', key: 'sqltext', width: 400, ellipsis: { tooltip: true } },
+  { title: '描述', key: 'title', width: 200, ellipsis: { tooltip: true } },
+  { title: '创建时间', key: 'created_at', width: 180, ellipsis: { tooltip: true } },
   {
     title: '操作',
     key: 'actions',
+    width: 120,
+    fixed: 'right',
     render(row: any) {
       return h('div', { style: 'display:flex; gap:8px;' }, [
         h(
           NButton,
           {
             type: 'primary',
-            size: 'small',
+            size: 'tiny',
+            ghost: true,
             onClick: () => useFavorite(row)
           },
-          { default: () => '使用' }
+          { default: () => '执行' }
         ),
         h(
           NButton,
           {
             type: 'error',
-            size: 'small',
+            size: 'tiny',
+            quaternary: true,
             onClick: () => deleteFavorite(row.id)
           },
           { default: () => '删除' }
@@ -96,17 +104,9 @@ const columns: any[] = [
 
 <template>
   <div class="favorite-container">
-    <NCard :bordered="false" size="small">
-      <template #header>
-        <NSpace justify="space-between">
-          <span>收藏SQL</span>
-          <NButton type="primary" size="small" @click="loadFavorites">
-            <template #icon>
-              <SvgIcon icon="i-carbon-refresh" />
-            </template>
-            刷新
-          </NButton>
-        </NSpace>
+    <NCard :bordered="!embedded" size="small" :content-style="{ padding: embedded ? '0' : '' }">
+      <template v-if="!embedded" #header>
+        <span>收藏SQL</span>
       </template>
 
       <NSpin :show="loading">
@@ -114,7 +114,14 @@ const columns: any[] = [
           <NEmpty description="暂无收藏SQL" />
         </div>
         <div v-else>
-          <NDataTable :columns="columns" :data="favorites" size="small" />
+          <NDataTable
+            :columns="columns"
+            :data="favorites"
+            size="small"
+            :scroll-x="1000"
+            :style="{ height: '300px' }"
+            flex-height
+          />
         </div>
       </NSpin>
     </NCard>
