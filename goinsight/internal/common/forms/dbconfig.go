@@ -15,6 +15,8 @@ type AdminGetDBConfigForm struct {
 type AdminCreateDBConfigForm struct {
 	Hostname        string                 `form:"hostname"  json:"hostname" binding:"required,min=2,max=128"`
 	Port            int                    `form:"port"  json:"port" binding:"required"`
+	UserName        string                 `form:"user_name"  json:"user_name" binding:"required,min=2,max=128"`
+	Password        string                 `form:"password"  json:"password" binding:"required,min=2,max=256"`
 	InspectParams   map[string]interface{} `form:"inspect_params" json:"inspect_params"`
 	UseType         models.EnumType        `form:"use_type"  json:"use_type" binding:"required,oneof=查询 工单"`
 	DbType          models.EnumType        `form:"db_type"  json:"db_type" binding:"required,oneof=MySQL TiDB ClickHouse"`
@@ -26,6 +28,8 @@ type AdminCreateDBConfigForm struct {
 type AdminUpdateDBConfigForm struct {
 	Hostname        string                 `form:"hostname"  json:"hostname" binding:"required,min=2,max=128"`
 	Port            int                    `form:"port"  json:"port" binding:"required"`
+	UserName        string                 `form:"user_name"  json:"user_name" binding:"required,min=2,max=128"`
+	Password        string                 `form:"password"  json:"password"`
 	InspectParams   map[string]interface{} `form:"inspect_params" json:"inspect_params"`
 	UseType         models.EnumType        `form:"use_type"  json:"use_type" binding:"required,oneof=查询 工单"`
 	DbType          models.EnumType        `form:"db_type"  json:"db_type" binding:"required,oneof=MySQL TiDB ClickHouse"`

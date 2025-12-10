@@ -24,6 +24,8 @@ type tidbQueryRecord struct {
 	RequestID string
 	Hostname  string
 	Port      int
+	DBUser    string
+	DBPass    string
 }
 
 type KillTiDBQuery struct{}
@@ -32,7 +34,7 @@ func (k *KillTiDBQuery) getDASRecords() *[]tidbQueryRecord {
 	// 获取global.App.Config.Config.MaxExecutionTime/1000时间内tidb异常的查询记录
 	var results []tidbQueryRecord
 	global.App.DB.Model(&models.InsightDASRecords{}).
-		Select("insight_das_records.username, insight_das_records.request_id, insight_db_config.hostname, insight_db_config.port").
+		Select("insight_das_records.username, insight_das_records.request_id, insight_db_config.hostname, insight_db_config.port, insight_db_config.user_name as db_user, insight_db_config.password as db_pass").
 		Joins("join insight_db_config on insight_das_records.instance_id = insight_db_config.instance_id").
 		Where("insight_das_records.is_finish=1 and insight_das_records.is_kill=0").
 		Where("insight_das_records.created_at>= date_sub(now(), interval ? second)", global.App.Config.Das.MaxExecutionTime/1000).
@@ -53,12 +55,12 @@ func (k *KillTiDBQuery) match(row tidbQueryRecord) (*[]string, *[]map[string]int
 			User="%s" 
 			and DB!="information_schema"
 			and INFO like "%%%s%%"
-	`, global.App.Config.RemoteDB.UserName, row.RequestID)
+	`, row.DBUser, row.RequestID)
 	ctx, cancel := context.WithTimeout(context.Background(), 3000*time.Millisecond)
 	defer cancel()
 	db := dao.DB{
-		User:     global.App.Config.RemoteDB.UserName,
-		Password: global.App.Config.RemoteDB.Password,
+		User:     row.DBUser,
+		Password: row.DBPass,
 		Host:     row.Hostname,
 		Port:     row.Port,
 		Database: "information_schema",
@@ -79,14 +81,14 @@ func (k *KillTiDBQuery) kill(row tidbQueryRecord) {
 	}
 	for _, d := range *data {
 		var killUser string = d["USER"].(string)
-		if killUser == global.App.Config.RemoteDB.UserName {
+		if killUser == row.DBUser {
 			queryID, _ := strconv.Atoi(d["ID"].(string))
 			query := fmt.Sprintf("kill tidb query %d", queryID)
 			ctx, cancel := context.WithTimeout(context.Background(), 3000*time.Millisecond)
 			defer cancel()
 			db := dao.DB{
-				User:     global.App.Config.RemoteDB.UserName,
-				Password: global.App.Config.RemoteDB.Password,
+				User:     row.DBUser,
+				Password: row.DBPass,
 				Host:     row.Hostname,
 				Port:     row.Port,
 				Database: "information_schema",

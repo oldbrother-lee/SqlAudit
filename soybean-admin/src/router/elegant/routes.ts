@@ -56,7 +56,8 @@ export const generatedRoutes: GeneratedRoute[] = [
         component: 'view.das_edit',
         meta: {
           title: 'das_edit',
-          i18nKey: 'route.das_edit'
+          i18nKey: 'route.das_edit',
+          icon: 'mdi:database-search'
         }
       },
       {

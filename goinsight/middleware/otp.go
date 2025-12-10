@@ -9,6 +9,7 @@ import (
 	"errors"
 	"goInsight/global"
 	userModels "goInsight/internal/users/models"
+	"goInsight/pkg/ldap"
 
 	"goInsight/pkg/response"
 
@@ -76,6 +77,42 @@ func OTPMiddleware() gin.HandlerFunc {
 		}
 		username := loginVals.Username
 		password := loginVals.Password
+
+		// LDAP 认证
+		if global.App.Config.LDAP.Enable {
+			ldapUser, err := ldap.Auth(username, password)
+			if err == nil {
+				// LDAP Auth Success
+				// Sync to Local DB (JIT)
+				var user userModels.InsightUsers
+				tx := global.App.DB.Where("username = ?", username).First(&user)
+				if tx.RowsAffected == 0 {
+					// Create new user
+					user = userModels.InsightUsers{
+						Username: ldapUser.Username,
+						NickName: ldapUser.Nickname,
+						Email:    ldapUser.Email,
+						Mobile:   ldapUser.Mobile,
+						Password: "", // No local password
+						IsActive: true,
+					}
+					global.App.DB.Create(&user)
+				} else {
+					// Update existing user info
+					user.NickName = ldapUser.Nickname
+					user.Email = ldapUser.Email
+					user.Mobile = ldapUser.Mobile
+					global.App.DB.Save(&user)
+				}
+
+				// Skip local password check and proceed
+				c.Set("loginUserName", username)
+				c.Set("loginNeedsOTP", "NO") // Assuming LDAP handles 2FA or we skip it
+				c.Next()
+				return
+			}
+			global.App.Log.Warnf("LDAP login failed for %s: %v, falling back to local", username, err)
+		}
 
 		check := userInfo{username: username, password: password}
 		// 检查用户是否存在

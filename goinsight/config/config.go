@@ -89,4 +89,21 @@ type Configuration struct {
 	Das      Das      `mapstructure:"das" json:"das" yaml:"das"`
 	Ghost    Ghost    `mapstructure:"ghost" json:"ghost" yaml:"ghost"`
 	Notify   Notify   `mapstructure:"notify" json:"notify" yaml:"notify"`
+	LDAP     LDAP     `mapstructure:"ldap" json:"ldap" yaml:"ldap"`
+}
+
+type LDAP struct {
+	Enable     bool   `mapstructure:"enable" json:"enable" yaml:"enable"`
+	Host       string `mapstructure:"host" json:"host" yaml:"host"`
+	Port       int    `mapstructure:"port" json:"port" yaml:"port"`
+	UseSSL     bool   `mapstructure:"use_ssl" json:"use_ssl" yaml:"use_ssl"`
+	BaseDN     string `mapstructure:"base_dn" json:"base_dn" yaml:"base_dn"`
+	BindDN     string `mapstructure:"bind_dn" json:"bind_dn" yaml:"bind_dn"`
+	BindPass   string `mapstructure:"bind_pass" json:"bind_pass" yaml:"bind_pass"`
+	UserFilter string `mapstructure:"user_filter" json:"user_filter" yaml:"user_filter"`
+	Attributes struct {
+		Nickname string `mapstructure:"nickname" json:"nickname" yaml:"nickname"`
+		Email    string `mapstructure:"email" json:"email" yaml:"email"`
+		Mobile   string `mapstructure:"mobile" json:"mobile" yaml:"mobile"`
+	} `mapstructure:"attributes" json:"attributes" yaml:"attributes"`
 }

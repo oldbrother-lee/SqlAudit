@@ -206,7 +206,8 @@ export function fetchExecuteAllTasks(data: Api.Orders.ExecuteAllTasksRequest) {
   return requestRaw<any>({
     url: '/api/v1/orders/tasks/execute-all',
     method: 'post',
-    data
+    data,
+    timeout: 24 * 60 * 60 * 1000
   });
 }
 

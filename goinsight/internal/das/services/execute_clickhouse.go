@@ -107,7 +107,7 @@ func (s *ExecuteClickHouseQueryService) Run() (ResponseData, error) {
 		return responseData, fmt.Errorf("当前接口仅支持ClickHouse，当前DB类型为%s", DbType)
 	}
 	// 获取DB配置
-	hostname, port, err := GetDBConfig(s.InstanceID)
+	hostname, port, username, password, err := GetDBConfig(s.InstanceID)
 	if err != nil {
 		return responseData, err
 	}
@@ -171,7 +171,7 @@ func (s *ExecuteClickHouseQueryService) Run() (ResponseData, error) {
 		Update("RewriteSqltext", SQLText)
 	// 调用clickhouse执行接口
 	var executeApi ExecuteApi = ClickHouseExecuteApi{ExecuteClickHouseQueryForm: s.ExecuteClickHouseQueryForm, Ctx: s.C.Request.Context()}
-	columns, data, duration, err := CalculateDuration(hostname, port, executeApi.Execute)
+	columns, data, duration, err := CalculateDuration(hostname, port, username, password, executeApi.Execute)
 	if err != nil {
 		return responseData, err
 	}

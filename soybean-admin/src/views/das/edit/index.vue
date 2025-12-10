@@ -180,6 +180,7 @@ interface EditorPane {
     total: number;
   };
   bottomActiveTab?: string;
+  editorHeight?: number;
 }
 
 const panes = ref<EditorPane[]>([
@@ -195,7 +196,8 @@ const panes = ref<EditorPane[]>([
     loading: false,
     responseMsg: '',
     pagination: { currentPage: 1, pageSize: 20, total: 0 },
-    bottomActiveTab: 'result'
+    bottomActiveTab: 'result',
+    editorHeight: 300
   }
 ]);
 
@@ -285,6 +287,32 @@ function createEditor(pane: EditorPane, el: HTMLElement) {
   const view = new EditorView({ state, parent: el });
   editorViews.value[pane.key] = markRaw(view);
 }
+
+const onResizeStart = (event: MouseEvent, pane: EditorPane) => {
+  const startY = event.clientY;
+  const startHeight = pane.editorHeight || 300;
+  
+  const onMouseMove = (e: MouseEvent) => {
+    e.preventDefault();
+    const deltaY = e.clientY - startY;
+    const newHeight = Math.max(100, startHeight + deltaY);
+    pane.editorHeight = newHeight;
+  };
+  
+  const onMouseUp = () => {
+    document.removeEventListener('mousemove', onMouseMove);
+    document.removeEventListener('mouseup', onMouseUp);
+    document.body.style.cursor = '';
+  };
+  
+  document.body.style.cursor = 'row-resize';
+  document.addEventListener('mousemove', onMouseMove);
+  document.addEventListener('mouseup', onMouseUp);
+};
+
+const showDictModal = ref(false);
+const dictLoading = ref(false);
+const dictHtmlContent = ref('');
 
 function setEditorRef(pane: EditorPane, el: HTMLElement | null) {
   if (!el) return;
@@ -550,7 +578,8 @@ const add = () => {
     loading: false,
     responseMsg: '',
     pagination: { currentPage: 1, pageSize: defaultPageSize, total: 0 },
-    bottomActiveTab: 'result'
+    bottomActiveTab: 'result',
+    editorHeight: 300
   });
   activeKey.value = activeKeyValue.toString();
 };
@@ -861,21 +890,214 @@ const loadDBDictData = async () => {
     return;
   }
   
+  dictLoading.value = true;
   try {
     const { data } = await fetchDBDict({
       instance_id: selectedSchema.value.instance_id,
       schema: selectedSchema.value.schema
     });
     
-    // 在新窗口中打开数据字典
-    const win = window.open('', '_blank');
-    if (win) {
-      win.document.write('<h1>数据字典</h1>');
-      win.document.write('<pre>' + JSON.stringify(data, null, 2) + '</pre>');
+    if (!data) {
+       window.$message?.warning('未获取到数据字典数据');
+       return;
     }
+
+    // 生成HTML
+    const html = generateDBDictHtml(data, selectedSchema.value.schema);
+    
+    dictHtmlContent.value = html;
+    showDictModal.value = true;
   } catch (error: any) {
     window.$message?.error(error?.message || '加载数据字典失败');
+  } finally {
+    dictLoading.value = false;
   }
+};
+
+const generateDBDictHtml = (data: any, schemaName: string) => {
+  let tables: any[] = [];
+
+  if (Array.isArray(data)) {
+    tables = data.map((row: any) => {
+      const columns = (row.COLUMNS_INFO || '').split('<a>').filter((s: string) => s).map((colStr: string) => {
+        const parts = colStr.split('<b>');
+        return {
+          columnName: parts[0],
+          dataType: parts[1],
+          isNullable: parts[2] === 'NULL',
+          columnDefault: parts[3],
+          characterSet: parts[4],
+          collation: parts[5],
+          columnComment: parts[6],
+          isPrimaryKey: false
+        };
+      });
+
+      const indexes: any[] = [];
+      const indexMap = new Map();
+      
+      (row.INDEXES_INFO || '').split('<a>').filter((s: string) => s).forEach((idxStr: string) => {
+        const parts = idxStr.split('<b>');
+        const indexName = parts[0];
+        const isUnique = parts[1] === '唯一';
+        const columnName = parts[4];
+        
+        if (!indexMap.has(indexName)) {
+          indexMap.set(indexName, {
+            indexName,
+            isUnique,
+            columnNames: []
+          });
+        }
+        indexMap.get(indexName).columnNames.push(columnName);
+      });
+      
+      indexMap.forEach(idx => indexes.push(idx));
+      
+      const pkIndex = indexes.find(idx => idx.indexName === 'PRIMARY');
+      if (pkIndex) {
+        pkIndex.columnNames.forEach((pkCol: string) => {
+          const col = columns.find((c: any) => c.columnName === pkCol);
+          if (col) col.isPrimaryKey = true;
+        });
+      }
+
+      return {
+        tableName: row.TABLE_NAME,
+        tableComment: row.TABLE_COMMENT,
+        createTime: row.CREATE_TIME,
+        columns,
+        indexes
+      };
+    });
+  } else if (data && data.tables) {
+    tables = data.tables;
+  }
+  
+  let html = `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>数据字典 - ${schemaName}</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; padding: 20px; color: #333; background-color: #f4f6f8; }
+    .container { max-width: 1400px; margin: 0 auto; background: #fff; padding: 30px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.05); }
+    h1 { text-align: center; margin-bottom: 30px; color: #2c3e50; border-bottom: 2px solid #eaeaea; padding-bottom: 15px; }
+    
+    .toc { background: #f8f9fa; padding: 20px; border-radius: 6px; margin-bottom: 40px; border: 1px solid #e9ecef; }
+    .toc h2 { margin-top: 0; font-size: 18px; border-bottom: 1px solid #ddd; padding-bottom: 10px; margin-bottom: 15px; color: #495057; }
+    .toc ul { list-style: none; padding: 0; display: flex; flex-wrap: wrap; gap: 10px; }
+    .toc li { margin: 0; }
+    .toc a { display: block; padding: 6px 12px; background: #fff; border: 1px solid #ddd; border-radius: 4px; text-decoration: none; color: #007bff; font-size: 14px; transition: all 0.2s; }
+    .toc a:hover { background: #e9ecef; border-color: #adb5bd; color: #0056b3; transform: translateY(-1px); box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+    
+    .table-section { margin-bottom: 40px; border: 1px solid #e9ecef; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.03); overflow: hidden; background: #fff; }
+    .table-header { background-color: #f8f9fa; padding: 15px 20px; border-bottom: 1px solid #e9ecef; display: flex; align-items: center; justify-content: space-between; }
+    .table-title { display: flex; align-items: baseline; flex-wrap: wrap; gap: 10px; }
+    .table-title h3 { margin: 0; margin-right: 15px; color: #2c3e50; font-size: 18px; }
+    .table-title .meta { color: #6c757d; font-size: 14px; margin-right: 15px; }
+    .back-to-top { font-size: 12px; color: #007bff; text-decoration: none; }
+    
+    .content { padding: 20px; }
+    h4 { margin-top: 0; margin-bottom: 15px; color: #495057; border-left: 4px solid #007bff; padding-left: 10px; font-size: 16px; }
+    
+    table { width: 100%; border-collapse: collapse; margin-bottom: 25px; font-size: 14px; }
+    th, td { border: 1px solid #dee2e6; padding: 10px 12px; text-align: left; }
+    th { background-color: #f1f3f5; font-weight: 600; color: #495057; white-space: nowrap; }
+    tr:nth-child(even) { background-color: #f8f9fa; }
+    tr:hover { background-color: #f1f3f5; }
+    
+    .primary-key { color: #d63384; font-weight: bold; background: #fff0f6; padding: 2px 6px; border-radius: 3px; font-size: 12px; border: 1px solid #ffadd2; white-space: nowrap; }
+    .nullable-no { color: #dc3545; font-weight: bold; }
+    .nullable-yes { color: #28a745; }
+    .data-type { color: #0d6efd; font-family: Consolas, Monaco, 'Andale Mono', monospace; }
+    .meta-info { font-size: 12px; color: #868e96; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1 id="top">数据字典: ${schemaName}</h1>
+    
+    <div class="toc">
+      <h2>表目录 (${tables.length})</h2>
+      <ul>
+        ${tables.map(t => `<li><a href="javascript:void(0)" onclick="document.getElementById('${t.tableName}').scrollIntoView({behavior: 'smooth'}); return false;">${t.tableName}</a></li>`).join('')}
+      </ul>
+    </div>
+
+    ${tables.map(table => `
+    <div id="${table.tableName}" class="table-section">
+      <div class="table-header">
+        <div class="table-title">
+          <h3>${table.tableName}</h3>
+          <span class="meta">注释: ${table.tableComment || '暂无'}</span>
+          ${table.createTime ? `<span class="meta">创建时间: ${table.createTime}</span>` : ''}
+        </div>
+        <a href="javascript:void(0)" onclick="document.getElementById('top').scrollIntoView({behavior: 'smooth'}); return false;" class="back-to-top">↑ 返回顶部</a>
+      </div>
+      
+      <div class="content">
+        <h4>列信息</h4>
+        <table>
+          <thead>
+            <tr>
+              <th>列名</th>
+              <th>类型</th>
+              <th>字符集/排序规则</th>
+              <th>允许空</th>
+              <th>默认值</th>
+              <th>注释</th>
+              <th>主键</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${table.columns.map((col: any) => `
+            <tr>
+              <td style="font-weight: 500">${col.columnName}</td>
+              <td class="data-type">${col.dataType}</td>
+              <td class="meta-info">
+                ${col.characterSet || ''}
+                ${col.characterSet && col.collation ? '<br>' : ''}
+                ${col.collation || ''}
+              </td>
+              <td class="${col.isNullable ? 'nullable-yes' : 'nullable-no'}">${col.isNullable ? '是' : '否'}</td>
+              <td>${col.columnDefault || ''}</td>
+              <td>${col.columnComment || ''}</td>
+              <td style="text-align: center;">${col.isPrimaryKey ? '<span class="primary-key">PK</span>' : ''}</td>
+            </tr>
+            `).join('')}
+          </tbody>
+        </table>
+
+        ${table.indexes && table.indexes.length > 0 ? `
+        <h4>索引信息</h4>
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 30%">索引名</th>
+              <th style="width: 50%">包含列</th>
+              <th style="width: 20%">唯一</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${table.indexes.map((idx: any) => `
+            <tr>
+              <td>${idx.indexName}</td>
+              <td>${idx.columnNames.join(', ')}</td>
+              <td style="text-align: center;">${idx.isUnique ? '是' : '否'}</td>
+            </tr>
+            `).join('')}
+          </tbody>
+        </table>
+        ` : ''}
+      </div>
+    </div>
+    `).join('')}
+  </div>
+</body>
+</html>`;
+  
+  return html;
 };
 
 
@@ -1187,9 +1409,12 @@ onUnmounted(() => {
                 :tab="pane.title"
                 :closable="pane.closable"
               >
-                <NSpace vertical :size="12">
-                  <div>
-                    <div class="code-editor-container" :ref="(el) => setEditorRef(pane, el as unknown as HTMLElement)" />
+                <NSpace vertical :size="0">
+                  <div class="code-editor-wrapper">
+                    <div class="code-editor-container" :style="{ height: (pane.editorHeight || 300) + 'px' }" :ref="(el) => setEditorRef(pane, el as unknown as HTMLElement)" />
+                    <div class="resize-handle" @mousedown.prevent="onResizeStart($event, pane)">
+                      <div class="resize-handle-bar"></div>
+                    </div>
                   </div>
                   <NTabs
                     v-model:value="pane.bottomActiveTab"
@@ -1212,7 +1437,7 @@ onUnmounted(() => {
                           </template>
                           点击格式化，按住 Shift 点击压缩
                         </NTooltip>
-                        <NButton size="tiny" @click="loadDBDictData">
+                        <NButton size="tiny" :loading="dictLoading" @click="loadDBDictData">
                           <template #icon><SvgIcon icon="carbon:document" /></template>
                           数据字典
                         </NButton>
@@ -1303,6 +1528,23 @@ onUnmounted(() => {
         </div>
       </NGi>
     </NGrid>
+    
+    <NModal
+      v-model:show="showDictModal"
+      preset="card"
+      style="width: 90%; height: 90vh; max-width: 1600px;"
+      :title="`数据字典: ${selectedSchema.schema || ''}`"
+      :bordered="false"
+      size="huge"
+    >
+      <div style="width: 100%; height: 100%; overflow: hidden; border-radius: 4px; border: 1px solid var(--n-border-color);">
+        <iframe
+          :srcdoc="dictHtmlContent"
+          style="width: 100%; height: 100%; border: none;"
+          sandbox="allow-scripts"
+        ></iframe>
+      </div>
+    </NModal>
   </NCard>
 </template>
 
@@ -1354,20 +1596,52 @@ onUnmounted(() => {
   font-size: 12px;
 }
 /* 美化 SQL 编辑框：容器边框、圆角与内边距 */
+.code-editor-wrapper {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 8px;
+}
 .code-editor-container {
   border: 1px solid var(--n-border-color);
-  border-radius: 8px;
+  border-bottom: none;
+  border-top-left-radius: 8px;
+  border-top-right-radius: 8px;
   background-color: var(--n-color);
-  margin-bottom: 8px;
+  resize: none;
+  overflow: hidden;
+}
+.resize-handle {
+  height: 12px;
+  cursor: row-resize;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--n-color);
+  border: 1px solid var(--n-border-color);
+  border-top: 1px solid var(--n-border-color);
+  border-bottom-left-radius: 8px;
+  border-bottom-right-radius: 8px;
+  transition: background-color 0.2s;
+}
+.resize-handle:hover {
+  background-color: var(--n-action-color);
+}
+.resize-handle-bar {
+  width: 32px;
+  height: 4px;
+  border-radius: 2px;
+  background-color: var(--n-border-color);
 }
 .code-editor-container :deep(.cm-editor) {
   background-color: transparent;
   font-family: 'JetBrains Mono', 'Fira Code', Menlo, Monaco, 'Courier New', monospace;
   font-size: 13px;
+  height: 100%;
 }
 .code-editor-container :deep(.cm-scroller) {
-  min-height: 300px;
+  height: 100%;
   padding: 4px;
+  overflow: auto;
 }
 .code-editor-container :deep(.cm-gutters) {
   background-color: var(--n-color);

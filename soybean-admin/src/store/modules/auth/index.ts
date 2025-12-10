@@ -98,14 +98,16 @@ export const useAuthStore = defineStore(SetupStoreId.Auth, () => {
    */
   async function login(userName: string, password: string, redirect = true) {
     startLoading();
-    const res = await fetchLogin(userName, password);
-    console.log(res.response);
-    const loginToken = res.response;
-    const { data: token, error } = loginToken;
-    // const { data: loginToken, error } = await fetchLogin(userName, password);
-    // console.log(loginToken)
-    if (!error) {
-      const pass = await loginByToken(token);
+    const { data: loginToken, error, response } = await fetchLogin(userName, password);
+    
+    // Fix: Handle flat response structure where data wrapper might be missing
+    let finalLoginToken = loginToken;
+    if (!finalLoginToken && !error && (response?.data as any)?.token) {
+      finalLoginToken = response.data as unknown as Api.Auth.LoginToken;
+    }
+
+    if (!error && finalLoginToken) {
+      const pass = await loginByToken(finalLoginToken);
 
       if (pass) {
         // Check if the tab needs to be cleared
@@ -137,15 +139,15 @@ export const useAuthStore = defineStore(SetupStoreId.Auth, () => {
     // localStg.set('refreshToken', loginToken.refreshToken);
 
     // 2. get user info
-    // const pass = await getUserInfo();
+    const pass = await getUserInfo();
     // console.log("token", loginToken.token)
-    // if (pass) {
-    //   token.value = loginToken.token;
+    if (pass) {
+      token.value = loginToken.token;
 
-    //   return true;
-    // }
+      return true;
+    }
 
-    return true;
+    return false;
   }
 
   async function getUserInfo() {
@@ -153,7 +155,13 @@ export const useAuthStore = defineStore(SetupStoreId.Auth, () => {
 
     if (!error) {
       // update store
-      Object.assign(userInfo, info);
+      const backendInfo = info as any;
+      Object.assign(userInfo, {
+        userId: String(backendInfo.uid),
+        userName: backendInfo.nick_name || backendInfo.username,
+        roles: [backendInfo.role || 'user'],
+        buttons: []
+      });
 
       return true;
     }
@@ -165,8 +173,7 @@ export const useAuthStore = defineStore(SetupStoreId.Auth, () => {
     const hasToken = getToken();
 
     if (hasToken) {
-      // const pass = await getUserInfo();
-      const pass = true;
+      const pass = await getUserInfo();
 
       if (!pass) {
         resetStore();

@@ -50,22 +50,24 @@ func (s *GetTableInfoService) validatePerms(uuid uuid.UUID) error {
 	return nil
 }
 
-func (s *GetTableInfoService) getConfigFromInstanceID() (hostname string, port int, err error) {
+func (s *GetTableInfoService) getConfigFromInstanceID() (hostname string, port int, username string, password string, err error) {
 	// 获取DB配置
 	type DASConfigResult struct {
 		Hostname string `json:"hostname"`
 		Port     int    `json:"port"`
+		UserName string `json:"user_name"`
+		Password string `json:"password"`
 	}
 	var result DASConfigResult
 	r := global.App.DB.Table("`insight_db_config` a").
-		Select("a.`hostname`, a.`port`").
+		Select("a.`hostname`, a.`port`, a.`user_name`, a.`password`").
 		Where("a.instance_id=?", s.InstanceID).
 		Take(&result)
 	// 判断记录是否存在
 	if errors.Is(r.Error, gorm.ErrRecordNotFound) {
-		return hostname, port, fmt.Errorf("指定DB配置的记录不存在,错误的信息:%s", r.Error.Error())
+		return hostname, port, username, password, fmt.Errorf("指定DB配置的记录不存在,错误的信息:%s", r.Error.Error())
 	}
-	return result.Hostname, result.Port, nil
+	return result.Hostname, result.Port, result.UserName, result.Password, nil
 }
 
 func (s GetTableInfoService) getDbType() (string, error) {
@@ -85,11 +87,11 @@ func (s GetTableInfoService) getDbType() (string, error) {
 	return result.DbType, nil
 }
 
-func (s *GetTableInfoService) getTableStruc(dbType string, hostname string, port int) (data *[]map[string]interface{}, err error) {
+func (s *GetTableInfoService) getTableStruc(dbType string, hostname string, port int, username string, password string) (data *[]map[string]interface{}, err error) {
 	if strings.EqualFold(dbType, "mysql") || strings.EqualFold(dbType, "tidb") {
 		db := dao.DB{
-			User:     global.App.Config.RemoteDB.UserName,
-			Password: global.App.Config.RemoteDB.Password,
+			User:     username,
+			Password: password,
 			Host:     hostname,
 			Port:     port,
 			Params:   map[string]string{"group_concat_max_len": "1073741824"},
@@ -103,8 +105,8 @@ func (s *GetTableInfoService) getTableStruc(dbType string, hostname string, port
 	}
 	if strings.EqualFold(dbType, "clickhouse") {
 		db := dao.ClickhouseDB{
-			User:     global.App.Config.RemoteDB.UserName,
-			Password: global.App.Config.RemoteDB.Password,
+			User:     username,
+			Password: password,
 			Host:     hostname,
 			Port:     port,
 			Ctx:      s.C.Request.Context(),
@@ -117,7 +119,7 @@ func (s *GetTableInfoService) getTableStruc(dbType string, hostname string, port
 	return data, err
 }
 
-func (s *GetTableInfoService) getTableBase(dbType string, hostname string, port int) (data *[]map[string]interface{}, err error) {
+func (s *GetTableInfoService) getTableBase(dbType string, hostname string, port int, username string, password string) (data *[]map[string]interface{}, err error) {
 	if strings.EqualFold(dbType, "mysql") || strings.EqualFold(dbType, "tidb") {
 		query := fmt.Sprintf(`
 					select
@@ -128,8 +130,8 @@ func (s *GetTableInfoService) getTableBase(dbType string, hostname string, port 
 						table_schema='%s' and table_name='%s'
 				`, s.Schema, s.Table)
 		db := dao.DB{
-			User:     global.App.Config.RemoteDB.UserName,
-			Password: global.App.Config.RemoteDB.Password,
+			User:     username,
+			Password: password,
 			Host:     hostname,
 			Port:     port,
 			Params:   map[string]string{"group_concat_max_len": "1073741824"},
@@ -147,7 +149,7 @@ func (s *GetTableInfoService) getTableBase(dbType string, hostname string, port 
 
 func (s *GetTableInfoService) Run() (responseData *[]map[string]interface{}, err error) {
 	// 获取DB配置
-	hostname, port, err := s.getConfigFromInstanceID()
+	hostname, port, username, password, err := s.getConfigFromInstanceID()
 	if err != nil {
 		return responseData, err
 	}
@@ -167,9 +169,9 @@ func (s *GetTableInfoService) Run() (responseData *[]map[string]interface{}, err
 	}
 	if s.Type == "structure" {
 		// 获取表结构
-		return s.getTableStruc(dbType, hostname, port)
+		return s.getTableStruc(dbType, hostname, port, username, password)
 	} else {
 		// 获取表基础信息
-		return s.getTableBase(dbType, hostname, port)
+		return s.getTableBase(dbType, hostname, port, username, password)
 	}
 }

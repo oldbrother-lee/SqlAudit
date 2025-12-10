@@ -44,22 +44,24 @@ func (s *GetDbDictService) validatePerms(uuid uuid.UUID) error {
 	return nil
 }
 
-func (s *GetDbDictService) getConfigFromInstanceID() (hostname string, port int, err error) {
+func (s *GetDbDictService) getConfigFromInstanceID() (hostname string, port int, username string, password string, err error) {
 	// 获取DB配置
 	type DASConfigResult struct {
 		Hostname string `json:"hostname"`
 		Port     int    `json:"port"`
+		UserName string `json:"user_name"`
+		Password string `json:"password"`
 	}
 	var result DASConfigResult
 	r := global.App.DB.Table("`insight_db_config` a").
-		Select("a.`hostname`, a.`port`").
+		Select("a.`hostname`, a.`port`, a.`user_name`, a.`password`").
 		Where("a.instance_id=?", s.InstanceID).
 		Take(&result)
 	// 判断记录是否存在
 	if errors.Is(r.Error, gorm.ErrRecordNotFound) {
-		return hostname, port, fmt.Errorf("指定DB配置的记录不存在,错误的信息:%s", r.Error.Error())
+		return hostname, port, username, password, fmt.Errorf("指定DB配置的记录不存在,错误的信息:%s", r.Error.Error())
 	}
-	return result.Hostname, result.Port, nil
+	return result.Hostname, result.Port, result.UserName, result.Password, nil
 }
 
 func (s *GetDbDictService) getDbType() (string, error) {
@@ -79,7 +81,7 @@ func (s *GetDbDictService) getDbType() (string, error) {
 	return result.DbType, nil
 }
 
-func (s *GetDbDictService) getDbDict(hostname string, port int) (data *[]map[string]interface{}, err error) {
+func (s *GetDbDictService) getDbDict(hostname string, port int, username string, password string) (data *[]map[string]interface{}, err error) {
 	query := fmt.Sprintf(`
 					select
 						t.TABLE_NAME,
@@ -121,8 +123,8 @@ func (s *GetDbDictService) getDbDict(hostname string, port int) (data *[]map[str
 						t.CREATE_TIME
 				`, s.Schema)
 	db := dao.DB{
-		User:     global.App.Config.RemoteDB.UserName,
-		Password: global.App.Config.RemoteDB.Password,
+		User:     username,
+		Password: password,
 		Host:     hostname,
 		Port:     port,
 		Database: "information_schema",
@@ -148,7 +150,7 @@ func (s *GetDbDictService) Run() (responseData *[]map[string]interface{}, err er
 		return responseData, err
 	}
 	// 获取DB配置
-	hostname, port, err := s.getConfigFromInstanceID()
+	hostname, port, username, password, err := s.getConfigFromInstanceID()
 	if err != nil {
 		return responseData, err
 	}
@@ -158,7 +160,7 @@ func (s *GetDbDictService) Run() (responseData *[]map[string]interface{}, err er
 		return responseData, err
 	}
 	if strings.EqualFold(dbType, "mysql") || strings.EqualFold(dbType, "tidb") {
-		return s.getDbDict(hostname, port)
+		return s.getDbDict(hostname, port, username, password)
 	}
 	return responseData, fmt.Errorf("%s不支持获取数据字典", dbType)
 }

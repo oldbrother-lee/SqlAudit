@@ -255,6 +255,8 @@ func executeTask(task ordersModels.InsightOrderTasks) (string, error) {
 	type Record struct {
 		Hostname         string
 		Port             uint16
+		UserName         string
+		Password         string
 		Schema           string
 		DBType           string
 		SQLType          string
@@ -262,7 +264,7 @@ func executeTask(task ordersModels.InsightOrderTasks) (string, error) {
 	}
 	var record Record
 	tx := global.App.DB.Table("`insight_order_records` a").
-		Select("a.db_type,a.sql_type,a.schema,a.export_file_format,b.hostname,b.port").
+		Select("a.db_type,a.sql_type,a.schema,a.export_file_format,b.hostname,b.port,b.user_name,b.password").
 		Joins("join `insight_db_config` b on a.instance_id=b.instance_id").
 		Where("a.order_id=?", task.OrderID).Take(&record)
 	if tx.RowsAffected == 0 {
@@ -273,8 +275,8 @@ func executeTask(task ordersModels.InsightOrderTasks) (string, error) {
 	config := base.DBConfig{
 		Hostname:         record.Hostname,
 		Port:             record.Port,
-		UserName:         global.App.Config.RemoteDB.UserName,
-		Password:         global.App.Config.RemoteDB.Password,
+		UserName:         record.UserName,
+		Password:         record.Password,
 		Schema:           record.Schema,
 		DBType:           record.DBType,
 		SQLType:          record.SQLType,

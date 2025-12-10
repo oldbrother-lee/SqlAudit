@@ -21,21 +21,23 @@ import (
 )
 
 // 获取DB配置
-func GetDBConfig(instance_id string) (hostname string, port int, err error) {
+func GetDBConfig(instance_id string) (hostname string, port int, username string, password string, err error) {
 	type DASConfigResult struct {
 		Hostname string `json:"hostname"`
 		Port     int    `json:"port"`
+		UserName string `json:"user_name"`
+		Password string `json:"password"`
 	}
 	var result DASConfigResult
 	r := global.App.DB.Table("`insight_db_config` a").
-		Select("a.`hostname`, a.`port`").
+		Select("a.`hostname`, a.`port`, a.`user_name`, a.`password`").
 		Where("a.instance_id=?", instance_id).
 		Take(&result)
 	// 判断记录是否存在
 	if errors.Is(r.Error, gorm.ErrRecordNotFound) {
-		return hostname, port, fmt.Errorf("指定DB配置的记录不存在，错误的信息:%s", r.Error.Error())
+		return hostname, port, username, password, fmt.Errorf("指定DB配置的记录不存在，错误的信息:%s", r.Error.Error())
 	}
-	return result.Hostname, result.Port, nil
+	return result.Hostname, result.Port, result.UserName, result.Password, nil
 }
 
 // 获取DB类型
@@ -84,9 +86,9 @@ func IsConcurrentRunning(username, instance_id, schema string) error {
 }
 
 // 计算延时
-func CalculateDuration(host string, port int, callback func(string, int) (*[]string, *[]map[string]interface{}, error)) (*[]string, *[]map[string]interface{}, int64, error) {
+func CalculateDuration(host string, port int, username string, password string, callback func(string, int, string, string) (*[]string, *[]map[string]interface{}, error)) (*[]string, *[]map[string]interface{}, int64, error) {
 	startTime := time.Now()
-	columns, data, err := callback(host, port)
+	columns, data, err := callback(host, port, username, password)
 	endTime := time.Now()
 	return columns, data, int64(endTime.Sub(startTime) / time.Millisecond), err
 }
@@ -102,7 +104,7 @@ type ResponseData struct {
 
 // 执行接口
 type ExecuteApi interface {
-	Execute(hostname string, port int) (*[]string, *[]map[string]interface{}, error)
+	Execute(hostname string, port int, username string, password string) (*[]string, *[]map[string]interface{}, error)
 }
 
 type ClickHouseExecuteApi struct {
@@ -110,10 +112,10 @@ type ClickHouseExecuteApi struct {
 	Ctx context.Context
 }
 
-func (m ClickHouseExecuteApi) Execute(hostname string, port int) (*[]string, *[]map[string]interface{}, error) {
+func (m ClickHouseExecuteApi) Execute(hostname string, port int, username string, password string) (*[]string, *[]map[string]interface{}, error) {
 	db := dao.ClickhouseDB{
-		User:     global.App.Config.RemoteDB.UserName,
-		Password: global.App.Config.RemoteDB.Password,
+		User:     username,
+		Password: password,
 		Host:     hostname,
 		Port:     port,
 		Database: m.Schema,
@@ -132,10 +134,10 @@ type MySQLExecuteApi struct {
 	Ctx context.Context
 }
 
-func (m MySQLExecuteApi) Execute(hostname string, port int) (*[]string, *[]map[string]interface{}, error) {
+func (m MySQLExecuteApi) Execute(hostname string, port int, username string, password string) (*[]string, *[]map[string]interface{}, error) {
 	db := dao.DB{
-		User:     global.App.Config.RemoteDB.UserName,
-		Password: global.App.Config.RemoteDB.Password,
+		User:     username,
+		Password: password,
 		Host:     hostname,
 		Port:     port,
 		Database: m.Schema,

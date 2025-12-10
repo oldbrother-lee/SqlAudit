@@ -106,7 +106,7 @@ func (s *ExecuteMySQLQueryService) Run() (ResponseData, error) {
 		return responseData, fmt.Errorf("当前接口仅支持MySQL/Aurora/TiDB，当前DB类型为%s", DbType)
 	}
 	// 获取DB配置
-	hostname, port, err := GetDBConfig(s.InstanceID)
+	hostname, port, username, password, err := GetDBConfig(s.InstanceID)
 	if err != nil {
 		return responseData, err
 	}
@@ -170,7 +170,7 @@ func (s *ExecuteMySQLQueryService) Run() (ResponseData, error) {
 		Update("RewriteSqltext", SQLText)
 	// 调用mysql和tidb执行接口
 	var executeApi ExecuteApi = MySQLExecuteApi{ExecuteMySQLQueryForm: s.ExecuteMySQLQueryForm, Ctx: s.C.Request.Context()}
-	columns, data, duration, err := CalculateDuration(hostname, port, executeApi.Execute)
+	columns, data, duration, err := CalculateDuration(hostname, port, username, password, executeApi.Execute)
 	if err != nil {
 		return responseData, err
 	}

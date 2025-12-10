@@ -125,8 +125,8 @@ func (s *CreateOrdersService) toJson(values []string) (datatypes.JSON, error) {
 func (s *CreateOrdersService) inspectSQL(config commonModels.InsightDBConfig) ([]checker.ReturnData, error) {
 	inspect := checker.SyntaxInspectService{
 		C:          s.C,
-		DbUser:     global.App.Config.RemoteDB.UserName,
-		DbPassword: global.App.Config.RemoteDB.Password,
+		DbUser:     config.UserName,
+		DbPassword: config.Password,
 		DbHost:     config.Hostname,
 		DbPort:     config.Port,
 		DBParams:   config.InspectParams,

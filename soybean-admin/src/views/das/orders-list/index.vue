@@ -19,7 +19,7 @@ interface QueryParams {
 const { routerPushByKey } = useRouterPush();
 
 const loading = ref(false);
-const onlyMyOrders = ref(false);
+const onlyMyOrders = ref(true);
 const data = ref<Api.Orders.Order[]>([]);
 const total = ref(0);
 const queryParams: QueryParams = reactive({
@@ -171,7 +171,7 @@ async function getOrdersList() {
       environment: queryParams.environment,
       status: queryParams.progress,
       search: queryParams.search,
-      onlyMyOrders: onlyMyOrders.value
+      only_my_orders: onlyMyOrders.value ? 1 : 0
     };
 
     const response = await fetchOrdersList(params);
@@ -257,16 +257,8 @@ onUnmounted(() => {
     <NCard title="工单列表" :bordered="false" size="small" class="card-wrapper sm:flex-1-hidden">
       <template #header-extra>
         <div class="flex-y-center gap-12px">
-          <NSwitch v-model:value="onlyMyOrders" @update:value="handleMyOrdersChange">
-            <template #checked>我的工单</template>
-            <template #unchecked>所有工单</template>
-          </NSwitch>
-          <NButton type="primary" ghost @click="handleRefresh">
-            <template #icon>
-              <icon-ic-round-refresh class="text-icon" />
-            </template>
-            刷新
-          </NButton>
+          <span class="text-14px">只看我的</span>
+          <NSwitch v-model:value="onlyMyOrders" size="small" @update:value="handleMyOrdersChange" />
         </div>
       </template>
 

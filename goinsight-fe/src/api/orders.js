@@ -150,6 +150,7 @@ export const executeAllTaskApi = (data) =>
     url: `/api/v1/orders/tasks/execute-all`,
     method: 'post',
     data: data,
+    timeout: 24 * 60 * 60 * 1000,
   })
 
 // 下载导出文件

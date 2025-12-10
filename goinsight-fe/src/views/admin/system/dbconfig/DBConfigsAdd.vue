@@ -73,6 +73,30 @@
         >
         </a-input-number>
       </a-form-item>
+      <a-form-item label="账号" has-feedback>
+        <a-input
+          v-decorator="[
+            'user_name',
+            {
+              rules: [{ required: true, min: 2, max: 128, message: '请输入账号' }],
+              validateTrigger: 'blur',
+            },
+          ]"
+        >
+        </a-input>
+      </a-form-item>
+      <a-form-item label="密码" has-feedback>
+        <a-input-password
+          v-decorator="[
+            'password',
+            {
+              rules: [{ required: true, message: '请输入密码' }],
+              validateTrigger: 'blur',
+            },
+          ]"
+        >
+        </a-input-password>
+      </a-form-item>
       <a-form-item label="自定义审核参数" help="格式要求为JSON类型，默认为{}，表示继承全局审核参数" has-feedback>
         <a-textarea
           :auto-size="{ minRows: 5, maxRows: 10 }"

@@ -5,6 +5,7 @@
       <a-form-item>
         <a-switch
           class="cus-switch"
+          size="small"
           :checked="onlyMyOrders"
           checked-children="我的工单"
           un-checked-children="我的工单"
@@ -239,7 +240,7 @@ export default {
   data() {
     return {
       loading: false,
-      onlyMyOrders: false,
+      onlyMyOrders: true,
       environments: [],
       progs: ['待审核', '已驳回', '已批准', '执行中', '已关闭', '已完成', '已复核'],
       tableColumns,
@@ -260,7 +261,7 @@ export default {
     // 我的工单，点击显示我的工单
     onMyChange(checked) {
       this.storeMyOrder(checked ? 'ON' : 'OFF')
-      this.onlyMyOrders = this.sqlState.orders.my_order == 'ON' ? true : false
+      this.onlyMyOrders = this.sqlState.orders.my_order == 'ON'
       // 重置分页参数
       this.pagination.current = 1
       this.pagination.pageSize = 10
@@ -303,7 +304,7 @@ export default {
         page_size: this.pagination.pageSize,
         page: this.pagination.current,
         is_page: true,
-        only_my_orders: this.onlyMyOrders === true ? 1 : 0,
+        only_my_orders: this.onlyMyOrders ? 1 : 0,
         ...this.filters,
       }
       getListApi(params)
@@ -362,8 +363,8 @@ export default {
   mounted() {
     this.getEnvironments()
     // 加载我的工单状态
-    if (this.sqlState.orders.my_order == 'ON') {
-      this.onlyMyOrders = true
+    if (this.sqlState.orders.my_order == 'OFF') {
+      this.onlyMyOrders = false
     }
     this.getList()
     // 每30s刷新一次接口

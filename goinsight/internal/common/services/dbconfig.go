@@ -32,7 +32,7 @@ func (s *AdminGetDBConfigServices) Run() (responseData interface{}, total int64,
 		OrganizationKey  string `json:"organization_key"`
 	}
 	var dbs []DBConfig
-	tx := global.App.DB.Select(`a.id,a.instance_id,a.hostname,a.port,a.use_type,a.db_type,a.inspect_params,a.organization_path,b.id as environment, 
+	tx := global.App.DB.Select(`a.id,a.instance_id,a.hostname,a.port,a.user_name,a.use_type,a.db_type,a.inspect_params,a.organization_path,b.id as environment, 
 							b.name as environment_name, a.remark, ifnull(
 								concat(
 									(
@@ -98,6 +98,8 @@ func (s *AdminCreateDBConfigService) Run() error {
 	db := models.InsightDBConfig{
 		Hostname:         s.Hostname,
 		Port:             s.Port,
+		UserName:         s.UserName,
+		Password:         s.Password,
 		InspectParams:    datatypes.JSON(jsonInspectParams),
 		UseType:          s.UseType,
 		DbType:           s.DbType,
@@ -140,10 +142,12 @@ func (s *AdminUpdateDBConfigService) Run() error {
 	if err != nil {
 		return err
 	}
-	// 更新记录
-	result := global.App.DB.Model(&models.InsightDBConfig{}).Where("id=?", s.ID).Updates(map[string]interface{}{
+
+	// 准备更新的数据
+	updates := map[string]interface{}{
 		"hostname":          s.Hostname,
 		"port":              s.Port,
+		"user_name":         s.UserName,
 		"inspect_params":    datatypes.JSON(jsonInspectParams),
 		"use_type":          s.UseType,
 		"db_type":           s.DbType,
@@ -151,7 +155,15 @@ func (s *AdminUpdateDBConfigService) Run() error {
 		"organization_key":  s.OrganizationKey[len(s.OrganizationKey)-1],
 		"organization_path": organizationKeyJson,
 		"remark":            s.Remark,
-	})
+	}
+
+	// 如果密码不为空，则更新密码
+	if s.Password != "" {
+		updates["password"] = s.Password
+	}
+
+	// 更新记录
+	result := global.App.DB.Model(&models.InsightDBConfig{}).Where("id=?", s.ID).Updates(updates)
 	if result.Error != nil {
 		mysqlErr := result.Error.(*mysql.MySQLError)
 		switch mysqlErr.Number {

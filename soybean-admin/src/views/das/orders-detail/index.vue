@@ -571,6 +571,31 @@ const getTasks = async (force = false) => {
     const { data } = await fetchTasks({ order_id: orderId });
     if (data) {
       tasksList.value = data;
+
+      // 如果 oscContent 为空且有任务数据，尝试从任务结果中恢复日志
+      if (!oscContent.value && data.length > 0) {
+        let historyLogs = '';
+        data.forEach((task: any) => {
+          if (task.result) {
+            try {
+              // result 可能是字符串也可能是对象
+              const resultObj = typeof task.result === 'string' ? JSON.parse(task.result) : task.result;
+              if (resultObj && resultObj.execute_log) {
+                // 添加任务标识，以便区分不同任务的日志
+                if (data.length > 1) {
+                  historyLogs += `\n--- Task ${task.task_id} ---\n`;
+                }
+                historyLogs += resultObj.execute_log + '\n';
+              }
+            } catch (e) {
+              console.error('解析任务结果失败:', e);
+            }
+          }
+        });
+        if (historyLogs) {
+          oscContent.value = historyLogs;
+        }
+      }
     }
   } catch (error) {
     console.error('获取任务列表失败:', error);
@@ -1177,8 +1202,8 @@ const submitHook = async () => {
                   </div>
                 </NTabPane>
 
-                <!-- OSC进度标签页 -->
-                <NTabPane name="osc-progress" tab="OSC进度">
+                <!-- 执行进度标签页 -->
+                <NTabPane name="osc-progress" tab="执行进度">
                   <div class="tab-content">
                     <LogViewer :content="oscContent" height="500px" :theme="theme" />
                   </div>

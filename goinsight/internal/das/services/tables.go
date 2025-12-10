@@ -23,6 +23,8 @@ type ConfigResult struct {
 	Port     int
 	Schema   string
 	DbType   string
+	UserName string
+	Password string
 }
 
 type GetTablesService struct {
@@ -75,8 +77,8 @@ func (s *GetTablesService) getMySQLMetaData(r *ConfigResult) (data *[]map[string
 			table_schema, table_name order by table_name
 		`, r.Schema)
 	db := dao.DB{
-		User:     global.App.Config.RemoteDB.UserName,
-		Password: global.App.Config.RemoteDB.Password,
+		User:     r.UserName,
+		Password: r.Password,
 		Host:     r.Hostname,
 		Port:     r.Port,
 		Params:   map[string]string{"group_concat_max_len": "4194304"},
@@ -128,8 +130,8 @@ func (s *GetTablesService) getClickHouseMetaData(r *ConfigResult) (data *[]map[s
 		ORDER BY table ASC
 	`, r.Schema)
 	db := dao.ClickhouseDB{
-		User:     global.App.Config.RemoteDB.UserName,
-		Password: global.App.Config.RemoteDB.Password,
+		User:     r.UserName,
+		Password: r.Password,
 		Host:     r.Hostname,
 		Port:     r.Port,
 		Ctx:      s.C.Request.Context(),
@@ -153,7 +155,7 @@ func (s *GetTablesService) Run() (responseData *[]map[string]interface{}, err er
 		return responseData, err
 	}
 	var config ConfigResult
-	global.App.DB.Table("insight_db_config").Where("`instance_id`=?", s.InstanceID).Take(&config)
+	global.App.DB.Table("insight_db_config").Select("hostname", "port", "db_type", "user_name", "password").Where("`instance_id`=?", s.InstanceID).Take(&config)
 	config.Schema = s.Schema
 	if strings.EqualFold(config.DbType, "mysql") || strings.EqualFold(config.DbType, "tidb") {
 		return s.getMySQLMetaData(&config)

@@ -105,9 +105,11 @@ func SyncDBMeta() {
 		Hostname   string
 		Port       int
 		DbType     string
+		UserName   string
+		Password   string
 	}
 	var results []Result
-	global.App.DB.Table("insight_db_config").Scan(&results)
+	global.App.DB.Table("insight_db_config").Select("instance_id", "hostname", "port", "db_type", "user_name", "password").Scan(&results)
 	// 启动4个并发
 	var wg sync.WaitGroup
 	ch := make(chan struct{}, 4)
@@ -132,8 +134,8 @@ func SyncDBMeta() {
 			switch strings.ToLower(row.DbType) {
 			case "mysql", "tidb":
 				db := dao.DB{
-					User:     global.App.Config.RemoteDB.UserName,
-					Password: global.App.Config.RemoteDB.Password,
+					User:     row.UserName,
+					Password: row.Password,
 					Host:     row.Hostname,
 					Port:     row.Port,
 					Params:   map[string]string{"group_concat_max_len": "67108864"},
@@ -142,8 +144,8 @@ func SyncDBMeta() {
 				_, data, err = db.Query(mysqlQuery)
 			case "clickhouse":
 				db := dao.ClickhouseDB{
-					User:     global.App.Config.RemoteDB.UserName,
-					Password: global.App.Config.RemoteDB.Password,
+					User:     row.UserName,
+					Password: row.Password,
 					Host:     row.Hostname,
 					Port:     row.Port,
 					Ctx:      ctx,
@@ -158,7 +160,7 @@ func SyncDBMeta() {
 				return
 			}
 			if len(*data) == 0 {
-				global.App.Log.Warn(fmt.Sprintf("从主机%s:%d同步元数据失败，未发现库记录，请检查账号%s是否有SELECT权限", row.Hostname, row.Port, global.App.Config.RemoteDB.UserName))
+				global.App.Log.Warn(fmt.Sprintf("从主机%s:%d同步元数据失败，未发现库记录，请检查账号%s是否有SELECT权限", row.Hostname, row.Port, row.UserName))
 			}
 			// 创建元数据记录
 			for _, d := range *data {
