@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, h, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { useDebounceFn } from '@vueuse/core';
 import { NButton, NDataTable, NSpace, NStep, NSteps, NTag, NTooltip, useDialog, useMessage } from 'naive-ui';
 import type { TagProps } from 'naive-ui';
 import { format } from 'sql-formatter';
@@ -241,6 +242,11 @@ const initWebSocket = () => {
 
   websocket.value = new WebSocket(wsUrl);
 
+  // Debounce task refresh to avoid flooding the server
+  const debouncedRefresh = useDebounceFn(() => {
+    getTasks(true);
+  }, 1000);
+
   websocket.value.onopen = () => {
     console.log('WebSocket connected');
   };
@@ -262,9 +268,13 @@ const initWebSocket = () => {
         // Replace content
         oscContent.value = result.data;
       }
+      // Auto refresh tasks on any message
+      debouncedRefresh();
     } catch (e) {
       console.error('WebSocket message parse error:', e);
       oscContent.value += `${event.data}\n`;
+      // Auto refresh tasks even on parse error as it implies activity
+      debouncedRefresh();
     }
   };
 
