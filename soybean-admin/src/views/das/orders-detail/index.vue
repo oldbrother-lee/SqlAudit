@@ -2,7 +2,7 @@
 import { computed, h, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useDebounceFn } from '@vueuse/core';
-import { NButton, NDataTable, NSpace, NStep, NSteps, NTag, NTooltip, useDialog, useMessage } from 'naive-ui';
+import { NButton, NDataTable, NDatePicker, NSpace, NStep, NSteps, NTag, NTooltip, useDialog, useMessage } from 'naive-ui';
 import type { TagProps } from 'naive-ui';
 import { format } from 'sql-formatter';
 import {
@@ -21,9 +21,11 @@ import {
   fetchPreviewTasks,
   fetchReviewOrder,
   fetchSyntaxCheck,
-  fetchTasks
+  fetchTasks,
+  fetchUpdateOrderSchedule
 } from '@/service/api/orders';
 import { useThemeStore } from '@/store/modules/theme';
+import { useAuthStore } from '@/store/modules/auth';
 import ReadonlySqlEditor from '@/components/custom/readonly-sql-editor.vue';
 import LogViewer from '@/components/custom/log-viewer.vue';
 
@@ -32,6 +34,7 @@ const router = useRouter();
 const message = useMessage();
 const dialog = useDialog();
 const themeStore = useThemeStore();
+const authStore = useAuthStore();
 
 const showProgress = ref(false); // 默认收起工单进度
 
@@ -67,6 +70,7 @@ interface OrderDetailVO {
   export_file_format: string;
   environment: string;
   instance: string;
+  schedule_time?: string;
 }
 
 // 工单详情数据
@@ -265,8 +269,8 @@ const initWebSocket = () => {
         // Append ghost logs
         oscContent.value += result.data;
       } else {
-        // Replace content
-        oscContent.value = result.data;
+        // Append content
+        oscContent.value += result.data + '\n';
       }
       // Auto refresh tasks on any message
       debouncedRefresh();
@@ -410,8 +414,8 @@ const resultColumns = computed<any[]>(() => [
           size: 'small',
           type: 'primary',
           secondary: true,
-          // 禁用条件：工单不可执行 或 任务已完成 或 任务正在执行
-          disabled: !isOrderExecutable || isTaskCompleted || isTaskRunning,
+          // 禁用条件：工单不可执行 或 任务已完成 或 任务正在执行 或 是定时工单
+          disabled: !isOrderExecutable || isTaskCompleted || isTaskRunning || !!orderDetail.value?.schedule_time,
           onClick: () => handleExecuteSingle(row)
         },
         { default: () => '执行' }
@@ -562,6 +566,54 @@ const getOrderDetail = async () => {
   } finally {
     loading.value = false;
   }
+};
+
+const isExecutor = computed(() => {
+  if (!orderDetail.value || !authStore.userInfo.userName) return false;
+  return orderDetail.value.executor?.includes(authStore.userInfo.userName);
+});
+
+const canEditSchedule = computed(() => {
+  const p = orderDetail.value?.progress;
+  if (!p) return false;
+  return isExecutor.value && !['已完成', '已复核', '已关闭', '已失败'].includes(p);
+});
+
+const isEditingSchedule = ref(false);
+const newScheduleTime = ref<number | null>(null);
+
+const handleStartEditSchedule = () => {
+  if (orderDetail.value?.schedule_time) {
+    newScheduleTime.value = new Date(orderDetail.value.schedule_time).getTime();
+  }
+  isEditingSchedule.value = true;
+};
+
+const handleSaveSchedule = async () => {
+  if (!orderDetail.value || !newScheduleTime.value) return;
+  loading.value = true;
+  try {
+    const d = new Date(newScheduleTime.value);
+    const pad = (n: number) => n.toString().padStart(2, '0');
+    const formatted = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+
+    await fetchUpdateOrderSchedule({
+      order_id: orderDetail.value.order_id,
+      schedule_time: formatted
+    });
+    window.$message?.success('更新计划时间成功');
+    isEditingSchedule.value = false;
+    handleRefresh();
+  } catch (e: any) {
+    window.$message?.error(e?.message || '更新失败');
+  } finally {
+    loading.value = false;
+  }
+};
+
+const handleCancelEditSchedule = () => {
+  isEditingSchedule.value = false;
+  newScheduleTime.value = null;
 };
 
 // 获取任务列表
@@ -764,15 +816,16 @@ const handleGenerateTasks = async () => {
 
 const handleExecuteAll = async () => {
   if (!orderDetail.value) return;
+  activeTab.value = 'osc-progress';
   executeLoading.value = true;
   try {
     // 如果没有任务，先自动生成任务
-    if (tasksList.value.length === 0) {
-      const { error: genError } = await fetchGenerateTasks({ order_id: orderDetail.value.order_id } as any);
-      if (genError) return;
-      // 刷新任务列表
-      await getTasks(true);
-    }
+    // if (tasksList.value.length === 0) {
+    //   const { error: genError } = await fetchGenerateTasks({ order_id: orderDetail.value.order_id } as any);
+    //   if (genError) return;
+    //   // 刷新任务列表
+    //   await getTasks(true);
+    // }
 
     const { data, error } = await fetchExecuteAllTasks({ order_id: orderDetail.value.order_id } as any);
     if (error) return;
@@ -788,7 +841,6 @@ const handleExecuteAll = async () => {
       window.$message?.success(msgContent);
     }
 
-    activeTab.value = 'results';
     handleRefresh();
   } catch (e: any) {
     window.$message?.error(e?.message || '执行失败');
@@ -798,6 +850,7 @@ const handleExecuteAll = async () => {
 };
 
 const handleExecuteSingle = async (row: any) => {
+  activeTab.value = 'osc-progress';
   try {
     await fetchExecuteSingleTask({ task_id: row.id } as any);
     window.$message?.success('已触发执行');
@@ -943,6 +996,7 @@ const submitHook = async () => {
                 ghost
                 size="small"
                 :loading="executeLoading"
+                :disabled="!!orderDetail?.schedule_time"
                 @click="handleExecuteAll"
               >
                 <template #icon>
@@ -998,6 +1052,28 @@ const submitHook = async () => {
                 <div class="info-item">
                   <span class="label">更新时间：</span>
                   <span class="value">{{ orderDetail?.updated_at }}</span>
+                </div>
+                <div v-if="orderDetail?.schedule_time" class="info-item">
+                  <span class="label">计划时间：</span>
+                  <div v-if="isEditingSchedule" class="flex items-center gap-2">
+                    <NDatePicker v-model:value="newScheduleTime" type="datetime" size="small" clearable />
+                    <NButton size="tiny" type="primary" @click="handleSaveSchedule">保存</NButton>
+                    <NButton size="tiny" @click="handleCancelEditSchedule">取消</NButton>
+                  </div>
+                  <div v-else class="flex items-center gap-2">
+                    <span class="value">{{ orderDetail?.schedule_time }}</span>
+                    <NButton
+                      v-if="canEditSchedule"
+                      size="tiny"
+                      type="primary"
+                      text
+                      @click="handleStartEditSchedule"
+                    >
+                      <template #icon>
+                        <div class="i-ant-design:edit-outlined" />
+                      </template>
+                    </NButton>
+                  </div>
                 </div>
               </div>
 

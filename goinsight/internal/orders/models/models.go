@@ -6,6 +6,8 @@
 package models
 
 import (
+	"time"
+
 	"goInsight/internal/common/models"
 
 	"github.com/google/uuid"
@@ -33,6 +35,7 @@ type InsightOrderRecords struct {
 	Schema           string          `gorm:"type:varchar(128);not null;default:'';comment:库名" json:"schema"`
 	Progress         models.EnumType `gorm:"type:ENUM('待审核', '已驳回', '已批准', '执行中', '已关闭', '已完成', '已复核');default:'待审核';comment:工单进度" json:"progress"`
 	ExecuteResult    string          `gorm:"type:varchar(32);default:'';comment:执行结果(success,error,warning)" json:"execute_result"`
+	ScheduleTime     *time.Time      `gorm:"type:datetime;null;default:null;comment:计划执行时间" json:"schedule_time"`
 	FixVersion       string          `gorm:"type:varchar(128);not null;default:'';comment:上线版本;index" json:"fix_version"`
 	Content          string          `gorm:"type:text;null;comment:工单内容" json:"content"`
 	ExportFileFormat models.EnumType `gorm:"type:ENUM('XLSX', 'CSV');default:'XLSX';comment:导出文件格式" json:"export_file_format"`

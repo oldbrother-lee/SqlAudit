@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, nextTick, onUnmounted, h, watch, resolveComponent, markRaw, toRaw } from 'vue';
+import { ref, computed, onMounted, nextTick, onUnmounted, h, watch, markRaw, toRaw } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { format } from 'sql-formatter';
 import { fetchExecuteMySQLQuery, fetchExecuteClickHouseQuery, fetchSchemas, fetchTables, fetchUserGrants, fetchDBDict, fetchTableInfo } from '@/service/api/das';
@@ -7,6 +7,7 @@ import TableColumnSetting from '@/components/advanced/table-column-setting.vue';
 import TableHeaderOperation from '@/components/advanced/table-header-operation.vue';
 import History from '../history/index.vue';
 import Favorite from '../favorite/index.vue';
+import SvgIcon from '@/components/custom/svg-icon.vue';
 // CodeMirror 6 imports
 import { EditorState, Compartment } from '@codemirror/state';
 import { EditorView, keymap, lineNumbers } from '@codemirror/view';
@@ -61,7 +62,6 @@ const filteredTreeData = computed(() => {
 
 // 自定义左侧 NTree 节点渲染：左侧字段名，右侧类型/列数
 const renderTreeLabel = ({ option }: { option: any }) => {
-  const SvgIcon = resolveComponent('SvgIcon') as any;
   const label = option.label || '';
 
   // 叶子节点：列
@@ -133,7 +133,6 @@ const renderTreeLabel = ({ option }: { option: any }) => {
 
 // 自定义展开/折叠图标为更常见的箭头（右/下），并禁用默认旋转
 const renderSwitcherIcon = ({ expanded }: { expanded: boolean }) => {
-  const SvgIcon = resolveComponent('SvgIcon') as any;
   return h(
     SvgIcon,
     { icon: expanded ? 'carbon:chevron-down' : 'carbon:chevron-right', class: 'das-tree-switcher-icon', style: 'transform: none' }

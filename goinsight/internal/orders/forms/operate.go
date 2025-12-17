@@ -21,3 +21,8 @@ type CloseForm struct {
 	OrderID string `form:"order_id" json:"order_id" binding:"required,uuid"`
 	Msg     string `form:"msg" json:"msg" binding:"max=256"`
 }
+
+type UpdateScheduleForm struct {
+	OrderID      string `form:"order_id" json:"order_id" binding:"required,uuid"`
+	ScheduleTime string `form:"schedule_time" json:"schedule_time" binding:"required,datetime=2006-01-02 15:04:05"`
+}

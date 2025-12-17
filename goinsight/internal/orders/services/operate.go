@@ -6,6 +6,7 @@ import (
 	"goInsight/global"
 	"goInsight/internal/orders/forms"
 	"goInsight/internal/orders/models"
+	"goInsight/internal/orders/scheduler"
 	"goInsight/pkg/notifier"
 	"goInsight/pkg/utils"
 	"time"
@@ -96,6 +97,14 @@ func (s *ApproveService) Run() (err error) {
 			if err := s.updateProgress(tx, "已批准"); err != nil {
 				return err
 			}
+			// 自动生成任务
+			if err := GenerateTasks(tx, record); err != nil {
+				return err
+			}
+			// 如果有计划执行时间，注册到调度器
+			if record.ScheduleTime != nil {
+				scheduler.AddJob(record)
+			}
 		}
 		// 如果点击驳回，将工单设置为已驳回
 		if s.Status == "reject" {
@@ -115,6 +124,61 @@ func (s *ApproveService) Run() (err error) {
 		receiver := []string{record.Applicant}
 		msg := fmt.Sprintf("您好，%s\n>工单标题：%s\n>附加消息：%s", logMsg, record.Title, s.Msg)
 		notifier.SendMessage(record.Title, record.OrderID.String(), receiver, msg)
+		return nil
+	})
+}
+
+// 更新计划时间
+type UpdateScheduleService struct {
+	*forms.UpdateScheduleForm
+	C        *gin.Context
+	Username string
+}
+
+func (s *UpdateScheduleService) Run() (err error) {
+	// 判断记录是否存在
+	var record models.InsightOrderRecords
+	tx := global.App.DB.Table("`insight_order_records`").Where("order_id=?", s.OrderID).Take(&record)
+	if tx.RowsAffected == 0 {
+		return fmt.Errorf("记录`%s`不存在", s.OrderID)
+	}
+
+	// Check status
+	if utils.IsContain([]string{"已完成", "已复核", "已关闭", "已失败"}, string(record.Progress)) {
+		return fmt.Errorf("工单已结束，无法修改计划时间")
+	}
+
+	// Parse time
+	parsedTime, err := time.Parse("2006-01-02 15:04:05", s.ScheduleTime)
+	if err != nil {
+		return fmt.Errorf("无效的时间格式")
+	}
+
+	// Check if schedule time is in the future
+	if parsedTime.Before(time.Now()) {
+		return fmt.Errorf("计划时间不能早于当前时间")
+	}
+
+	return global.App.DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&models.InsightOrderRecords{}).
+			Where("order_id=?", s.OrderID).
+			Updates(map[string]interface{}{
+				"schedule_time": parsedTime,
+				"updated_at":    time.Now().Format("2006-01-02 15:04:05"),
+			}).Error; err != nil {
+			return err
+		}
+
+		// Update scheduler
+		scheduler.RemoveJob(record.OrderID.String())
+		record.ScheduleTime = &parsedTime
+		scheduler.AddJob(record)
+
+		// Log
+		logMsg := fmt.Sprintf("用户%s修改了计划执行时间为：%s", s.Username, s.ScheduleTime)
+		if err := CreateOpLogs(tx, record.OrderID, s.Username, logMsg); err != nil {
+			return err
+		}
 		return nil
 	})
 }

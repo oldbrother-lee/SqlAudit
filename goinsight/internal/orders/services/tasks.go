@@ -33,6 +33,41 @@ func (s *GenerateTasksService) subTasksExist() bool {
 	return tx.RowsAffected == 0
 }
 
+// GenerateTasks generates tasks for the given order record using the provided db session.
+func GenerateTasks(tx *gorm.DB, record ordersModels.InsightOrderRecords) error {
+	// Check if tasks exist
+	var taskRecord ordersModels.InsightOrderTasks
+	if tx.Table("`insight_order_tasks`").Where("order_id=?", record.OrderID).Take(&taskRecord).RowsAffected > 0 {
+		return nil
+	}
+
+	// Split SQL
+	sqls, err := parser.SplitSQLText(record.Content)
+	if err != nil {
+		return err
+	}
+
+	// Create tasks
+	var tasks []map[string]interface{}
+	for _, sql := range sqls {
+		tasks = append(tasks, map[string]interface{}{
+			"OrderID":    record.OrderID,
+			"TaskID":     uuid.New(),
+			"DBType":     record.DBType,
+			"SQLType":    record.SQLType,
+			"SQL":        sql,
+			"created_at": time.Now().Format("2006-01-02 15:04:05"),
+			"updated_at": time.Now().Format("2006-01-02 15:04:05"),
+		})
+	}
+
+	if err := tx.Model(&ordersModels.InsightOrderTasks{}).Create(tasks).Error; err != nil {
+		global.App.Log.Error(err)
+		return err
+	}
+	return nil
+}
+
 func (s *GenerateTasksService) Run() (err error) {
 	// 工单是否存在
 	var record ordersModels.InsightOrderRecords
@@ -57,30 +92,9 @@ func (s *GenerateTasksService) Run() (err error) {
 	if !s.subTasksExist() {
 		return nil
 	}
-	// tasks记录不存在，生成记录
-	sqls, err := parser.SplitSQLText(record.Content)
-	if err != nil {
-		return err
-	}
-	// 批量插入
-	var tasks []map[string]interface{}
-	for _, sql := range sqls {
-		tasks = append(tasks, map[string]interface{}{
-			"OrderID":    s.OrderID,
-			"TaskID":     uuid.New(),
-			"DBType":     record.DBType,
-			"SQLType":    record.SQLType,
-			"SQL":        sql,
-			"created_at": time.Now().Format("2006-01-02 15:04:05"),
-			"updated_at": time.Now().Format("2006-01-02 15:04:05"),
-		})
-	}
+	
 	return global.App.DB.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Model(&ordersModels.InsightOrderTasks{}).Create(tasks).Error; err != nil {
-			global.App.Log.Error(err)
-			return err
-		}
-		return nil
+		return GenerateTasks(tx, record)
 	})
 }
 

@@ -6,6 +6,7 @@ import {
   NButton,
   NCard,
   NDataTable,
+  NDatePicker,
   NForm,
   NFormItem,
   NGi,
@@ -60,6 +61,7 @@ interface FormModel {
   reviewer: string[]; // username list
   cc: string[]; // username list
   content: string;
+  scheduleTime?: string | null;
 }
 
 const formModel = reactive<FormModel>({
@@ -75,7 +77,8 @@ const formModel = reactive<FormModel>({
   executor: [],
   reviewer: [],
   cc: [],
-  content: ''
+  content: '',
+  scheduleTime: null
 });
 
 // 下拉数据源
@@ -155,6 +158,9 @@ function initEditor() {
 watch(
   () => formModel.content,
   val => {
+    syntaxStatus.value = null;
+    syntaxRows.value = [];
+
     const view = editorView.value;
     if (!view) return;
     const cur = view.state.doc.toString();
@@ -290,6 +296,8 @@ async function syntaxCheck() {
     return;
   }
   checking.value = true;
+  syntaxStatus.value = null;
+  syntaxRows.value = [];
   try {
     const data = {
       db_type: formModel.dbType,
@@ -342,6 +350,11 @@ async function submitOrder() {
       return;
     }
 
+    if (syntaxStatus.value !== 0) {
+      message.error('语法检测未通过不允许提交工单');
+      return;
+    }
+
     const payload = {
       title: formModel.title,
       remark: formModel.remark,
@@ -356,7 +369,8 @@ async function submitOrder() {
       reviewer: formModel.reviewer,
       cc: formModel.cc,
       sql_type: sqlType.value,
-      content: formModel.content
+      content: formModel.content,
+      schedule_time: formModel.scheduleTime
     };
 
     const res: any = await fetchCreateOrder(payload as any);
@@ -451,6 +465,16 @@ watch(
                       { label: 'XLSX', value: 'XLSX' },
                       { label: 'CSV', value: 'CSV' }
                     ]"
+                  />
+                </NFormItem>
+                <NFormItem label="定时执行">
+                  <NDatePicker
+                    v-model:formatted-value="formModel.scheduleTime"
+                    type="datetime"
+                    clearable
+                    value-format="yyyy-MM-dd HH:mm:ss"
+                    placeholder="请选择计划执行时间(可选)"
+                    style="width: 100%"
                   />
                 </NFormItem>
                 <NFormItem label="审核人">

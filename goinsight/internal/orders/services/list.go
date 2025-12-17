@@ -29,19 +29,20 @@ type GetListServices struct {
 
 func (s *GetListServices) Run() (responseData interface{}, total int64, err error) {
 	type record struct {
-		OrderTitle       string           `json:"order_title"`
-		Progress         string           `json:"progress"`
-		IsRestrictAccess bool             `json:"is_restrict_access"`
-		Applicant        string           `json:"applicant"`
-		Organization     string           `json:"organization"`
-		Environment      string           `json:"environment"`
-		SqlType          string           `json:"sql_type"`
-		Instance         string           `json:"instance"`
-		Schema           string           `json:"schema"`
-		Approver         datatypes.JSON   `json:"approver"`
-		Reviewer         datatypes.JSON   `json:"reviewer"`
-		OrderID          string           `json:"order_id"`
-		CreatedAt        models.LocalTime `json:"created_at"`
+		OrderTitle       string            `json:"order_title"`
+		Progress         string            `json:"progress"`
+		IsRestrictAccess bool              `json:"is_restrict_access"`
+		Applicant        string            `json:"applicant"`
+		Organization     string            `json:"organization"`
+		Environment      string            `json:"environment"`
+		SqlType          string            `json:"sql_type"`
+		Instance         string            `json:"instance"`
+		Schema           string            `json:"schema"`
+		Approver         datatypes.JSON    `json:"approver"`
+		Reviewer         datatypes.JSON    `json:"reviewer"`
+		OrderID          string            `json:"order_id"`
+		CreatedAt        models.LocalTime  `json:"created_at"`
+		ScheduleTime     *models.LocalTime `json:"schedule_time"`
 	}
 	var records []record
 	tx := global.App.DB.Table("insight_order_records a").
@@ -58,7 +59,8 @@ func (s *GetListServices) Run() (responseData interface{}, total int64, err erro
 			a.approver, 
 			a.reviewer, 
 			a.order_id, 
-			a.created_at
+			a.created_at,
+			a.schedule_time
 		`).
 		Joins("left join insight_db_environments b on a.environment=b.id").
 		Joins("left join insight_db_config c on a.instance_id = c.instance_id").
@@ -66,6 +68,15 @@ func (s *GetListServices) Run() (responseData interface{}, total int64, err erro
 	// 仅加载我的工单
 	if s.OnlyMyOrders == 1 {
 		tx = tx.Where("a.applicant=?", s.Username)
+	} else {
+		// 检查当前用户是否是管理员
+		var isSuperuser bool
+		global.App.DB.Table("insight_users").Select("is_superuser").Where("username=?", s.Username).Scan(&isSuperuser)
+
+		// 如果不是管理员，加载我相关的工单(我提交的、我审批的、我执行的、我复核的)
+		if !isSuperuser {
+			tx = tx.Where("a.applicant=? OR JSON_SEARCH(a.approver, 'one', ?, NULL, '$[*].user') IS NOT NULL OR JSON_SEARCH(a.executor, 'one', ?, NULL, '$[*].user') IS NOT NULL OR JSON_SEARCH(a.reviewer, 'one', ?, NULL, '$[*].user') IS NOT NULL", s.Username, s.Username, s.Username, s.Username)
+		}
 	}
 	// 搜索
 	if s.Search != "" {

@@ -298,16 +298,19 @@ declare namespace Api {
     }
 
     interface Order {
-      id: number;
-      title: string;
+      order_id: string;
+      order_title: string;
       description?: string;
       sql: string;
-      status: string;
-      orderType: string;
-      createTime: string;
-      creator: string;
-      instanceName: string;
-      schemaName: string;
+      progress: string;
+      sql_type: string;
+      created_at: string;
+      applicant: string;
+      instance: string;
+      schema: string;
+      environment: string;
+      execution_mode?: string;
+      schedule_time?: string;
     }
 
     interface OrdersList extends Common.PaginatingQueryRecord<Order> {}

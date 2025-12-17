@@ -239,11 +239,20 @@ func (s *CreateOrdersService) Run() error {
 		return err
 	}
 	cc := datatypes.JSON(ccData)
+	// 解析计划执行时间
+	var scheduleTime *time.Time
+	if s.ScheduleTime != "" {
+		t, err := time.ParseInLocation("2006-01-02 15:04:05", s.ScheduleTime, time.Local)
+		if err != nil {
+			return fmt.Errorf("计划时间格式错误: %v", err)
+		}
+		scheduleTime = &t
+	}
 	// 生成工单ID
 	orderID := uuid.New()
 	// Title加上时间
-	timeStr := time.Now().Format("2006-01-02 15:04:05")
-	title := fmt.Sprintf("%s_[%s] ", s.Title, timeStr)
+	// timeStr := time.Now().Format("2006-01-02 15:04:05")
+	title := s.Title
 	record := models.InsightOrderRecords{
 		Title:            title,
 		OrderID:          orderID,
@@ -261,6 +270,7 @@ func (s *CreateOrdersService) Run() error {
 		Executor:         executor,
 		CC:               cc,
 		Content:          s.Content,
+		ScheduleTime:     scheduleTime,
 		ExportFileFormat: s.ExportFileFormat,
 	}
 	return global.App.DB.Transaction(func(tx *gorm.DB) error {

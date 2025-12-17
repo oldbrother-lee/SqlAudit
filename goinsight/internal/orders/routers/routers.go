@@ -25,6 +25,7 @@ func Routers(r *gin.Engine) {
 		v1.PUT("operate/feedback", views.FeedbackView)
 		v1.PUT("operate/review", views.ReviewView)
 		v1.PUT("operate/close", views.CloseView)
+		v1.PUT("operate/update-schedule", views.UpdateScheduleView)
 		v1.POST("hook", views.HookOrdersView)
 		v1.POST("generate-tasks", views.GenerateTasksView)
 		v1.GET("tasks/:order_id", views.GetTasksView)

@@ -16,7 +16,10 @@ import (
 	commonRouter "goInsight/internal/common/routers"
 	dasRouter "goInsight/internal/das/routers"
 	inspectRouter "goInsight/internal/inspect/routers"
+	"goInsight/internal/orders/forms"
 	ordersRouter "goInsight/internal/orders/routers"
+	"goInsight/internal/orders/scheduler"
+	"goInsight/internal/orders/services"
 	userRouter "goInsight/internal/users/routers"
 
 	"github.com/gin-gonic/gin"
@@ -91,6 +94,18 @@ func RunServer() {
 		fmt.Println("Failed to initialize authentication middleware:", err)
 		return
 	}
+
+	// Initialize scheduler
+	scheduler.SetExecutor(func(orderID string, username string) error {
+		service := services.ExecuteAllTaskService{
+			ExecuteAllTaskForm: &forms.ExecuteAllTaskForm{OrderID: orderID},
+			C:                  nil,
+			Username:           username,
+		}
+		_, _, err := service.Run()
+		return err
+	})
+	scheduler.Init()
 
 	// Load route configs for multiple APPs
 	routers.Include(

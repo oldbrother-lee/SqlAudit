@@ -146,6 +146,17 @@ export function fetchCloseOrder(data: Api.Orders.CloseOrderRequest) {
 }
 
 /**
+ * Update order schedule time
+ */
+export function fetchUpdateOrderSchedule(data: { order_id: string; schedule_time: string }) {
+  return request({
+    url: '/api/v1/orders/operate/update-schedule',
+    method: 'put',
+    data
+  });
+}
+
+/**
  * Hook order
  */
 export function fetchHookOrder(data: Api.Orders.HookOrderRequest) {

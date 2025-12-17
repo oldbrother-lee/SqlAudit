@@ -16,7 +16,17 @@ export function useTable<A extends NaiveUI.TableApiFn>(config: NaiveUI.NaiveTabl
 
   const isMobile = computed(() => appStore.isMobile);
 
-  const { apiFn, apiParams, immediate, showTotal } = config;
+  const { apiFn, apiParams, immediate, showTotal, transformer, pagination: paginationConfig } = config;
+
+  // set initial pagination params to apiParams
+  if (apiParams) {
+    if (!Reflect.has(apiParams, 'current')) {
+      Reflect.set(apiParams, 'current', 1);
+    }
+    if (!Reflect.has(apiParams, 'size')) {
+      Reflect.set(apiParams, 'size', paginationConfig?.pageSize || 10);
+    }
+  }
 
   const SELECTION_KEY = '__selection__';
 
@@ -37,7 +47,7 @@ export function useTable<A extends NaiveUI.TableApiFn>(config: NaiveUI.NaiveTabl
     apiFn,
     apiParams,
     columns: config.columns,
-    transformer: res => {
+    transformer: transformer || (res => {
       const { records = [], current = 1, size = 10, total = 0 } = res.data || {};
 
       // Ensure that the size is greater than 0, If it is less than 0, it will cause paging calculation errors.
@@ -56,7 +66,7 @@ export function useTable<A extends NaiveUI.TableApiFn>(config: NaiveUI.NaiveTabl
         pageSize,
         total
       };
-    },
+    }),
     getColumnChecks: cols => {
       const checks: NaiveUI.TableColumnCheck[] = [];
 
@@ -115,12 +125,13 @@ export function useTable<A extends NaiveUI.TableApiFn>(config: NaiveUI.NaiveTabl
     immediate
   });
 
-  const pagination: PaginationProps = reactive({
+  const pagination = reactive<PaginationProps>({
     page: 1,
     pageSize: 10,
     showSizePicker: true,
     itemCount: 0,
-    pageSizes: [10, 15, 20, 25, 30],
+    pageSizes: [10,  20, 50, 100],
+    ...(paginationConfig as PaginationProps),
     onUpdatePage: async (page: number) => {
       pagination.page = page;
 
@@ -152,7 +163,7 @@ export function useTable<A extends NaiveUI.TableApiFn>(config: NaiveUI.NaiveTabl
   // this is for mobile, if the system does not support mobile, you can use `pagination` directly
   const mobilePagination = computed(() => {
     const p: PaginationProps = {
-      ...pagination,
+      ...(pagination as any),
       pageSlot: isMobile.value ? 3 : 9,
       prefix: !isMobile.value && showTotal ? pagination.prefix : undefined
     };
