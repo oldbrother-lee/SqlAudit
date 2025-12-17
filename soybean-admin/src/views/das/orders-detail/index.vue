@@ -76,7 +76,6 @@ interface OrderDetailVO {
 // 工单详情数据
 const orderDetail = ref<OrderDetailVO | null>(null);
 const loading = ref(false);
-const orderId = computed(() => Number(route.query.id));
 
 // 其他状态
 const opLogs = ref<any[]>([]);
@@ -953,7 +952,7 @@ const submitHook = async () => {
               </NButton>
               <!-- 操作按钮组 -->
               <NButton
-                v-if="actionType !== 'none'"
+                v-if="actionType !== 'none' && actionType !== 'approve'"
                 type="primary"
                 size="small"
                 :disabled="actionDisabled"

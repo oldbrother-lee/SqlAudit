@@ -35,9 +35,11 @@ const {
 } = useTable({
   apiFn: fetchOrdersList,
   apiParams: searchParams,
+  showTotal: true,
   pagination: {
     pageSize: 10,
-    pageSizes: [10, 20, 50, 100]
+    pageSizes: [10, 20, 50, 100],
+    showQuickJumper: true
   },
   transformer: res => {
     const responseData = (res.data || {}) as any;
@@ -47,13 +49,14 @@ const {
     let total = 0;
 
     if (Array.isArray(responseData)) {
+      console.log('responseData', responseData);
       records = responseData;
       total = records.length;
     } else {
       records = responseData.records || responseData.items || responseData.rows || responseData.list || responseData.data || [];
-      current = responseData.current || responseData.page || responseData.page_num || 1;
-      size = responseData.size || responseData.pageSize || responseData.page_size || (searchParams as any).size || 10;
-      total = responseData.total || responseData.count || responseData.total_count || 0;
+      current = Number(responseData.current || responseData.page || responseData.page_num || 1);
+      size = Number(responseData.size || responseData.pageSize || responseData.page_size || (searchParams as any).size || 10);
+      total = Number(responseData.total || responseData.count || responseData.total_count || 0);
     }
 
     const pageSize = size <= 0 ? 10 : size;
@@ -131,7 +134,16 @@ const {
       key: 'environment',
       title: '环境',
       align: 'center',
-      width: 100
+      width: 100,
+      render: row => {
+        const tagMap: Record<string, NaiveUI.ThemeColor> = {
+          test: 'primary',
+          prod: 'error',
+          dev: 'info'
+        };
+        const type = tagMap[row.environment] || 'default';
+        return <NTag type={type} size="small">{row.environment}</NTag>;
+      }
     },
     {
       key: 'instance',
@@ -178,7 +190,7 @@ function getProgressTagColor(progress: string): NaiveUI.ThemeColor {
 }
 
 function handleRowClick(row: Api.Orders.Order) {
-  routerPushByKey('das_orders-detail', { query: { id: row.order_id } });
+  routerPushByKey('das_orders-detail', { params: { id: row.order_id } });
 }
 
 const rowProps = (row: Api.Orders.Order) => {
@@ -223,7 +235,6 @@ onUnmounted(() => {
       <NDataTable
         :columns="columns"
         :data="data"
-        size="small"
         :flex-height="!appStore.isMobile"
         :scroll-x="962"
         :loading="loading"
