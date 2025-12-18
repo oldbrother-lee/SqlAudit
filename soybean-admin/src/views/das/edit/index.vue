@@ -67,27 +67,9 @@ const renderTreeLabel = ({ option }: { option: any }) => {
 
   // 叶子节点：列
   if (option.isLeaf) {
-    // 兼容两种排列：
-    // 1) 列名 类型    2) 类型 列名
-    const parts = String(label).split(/\s+/).filter(Boolean);
-    let name = label;
-    let type = '';
-    if (parts.length > 1) {
-      const first = parts[0];
-      const rest = parts.slice(1).join(' ');
-      const typeKeywords = [
-        'varchar', 'char', 'text', 'longtext', 'mediumtext', 'tinytext', 'int', 'bigint', 'smallint', 'tinyint',
-        'decimal', 'double', 'float', 'datetime', 'timestamp', 'date', 'time', 'json'
-      ];
-      const isTypeFirst = /\)/.test(first) || typeKeywords.some(k => first.toLowerCase().startsWith(k));
-      if (isTypeFirst) {
-        type = first;
-        name = rest;
-      } else {
-        name = first;
-        type = rest;
-      }
-    }
+    const name = option.label;
+    const type = option.colType || '';
+
     return h(
       'span',
       { class: 'das-tree-item' },
@@ -519,10 +501,14 @@ const renderTree = (grants: any, data: any[]) => {
     
     columns.forEach((v: string) => {
       if (!v) return;
-      const colName = v.split('$$')[0];
+      const parts = v.split('$$');
+      const colName = parts[0];
+      const colType = parts.length > 1 ? parts[1] : '';
+
       tmpColumnsData.push({
-        title: v.replaceAll('$$', ' '),
-        label: v.replaceAll('$$', ' '),
+        title: colName,
+        label: colName,
+        colType,
         key: `${row['table_schema']}#${row['table_name']}#${colName}`,
         isLeaf: true
       });
