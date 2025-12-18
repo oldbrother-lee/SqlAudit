@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { ref, onMounted, toRaw } from 'vue';
+import { onMounted, ref, toRaw } from 'vue';
 import { jsonClone } from '@sa/utils';
+import { fetchOrdersEnvironments } from '@/service/api/orders';
 import { useNaiveForm } from '@/hooks/common/form';
 import { $t } from '@/locales';
-import { fetchOrdersEnvironments } from '@/service/api/orders';
 
 defineOptions({
   name: 'OrderSearch'
@@ -80,12 +80,7 @@ onMounted(() => {
               />
             </NFormItemGi>
             <NFormItemGi span="24 s:12 m:6" label="状态" path="status" class="pr-24px">
-              <NSelect
-                v-model:value="model.status"
-                placeholder="请选择状态"
-                :options="statusOptions"
-                clearable
-              />
+              <NSelect v-model:value="model.status" placeholder="请选择状态" :options="statusOptions" clearable />
             </NFormItemGi>
             <NFormItemGi span="24 s:12 m:6" label="搜索" path="search" class="pr-24px">
               <NInput v-model:value="model.search" placeholder="搜索工单标题、申请人..." clearable />

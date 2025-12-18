@@ -2,7 +2,18 @@
 import { computed, h, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useDebounceFn } from '@vueuse/core';
-import { NButton, NDataTable, NDatePicker, NSpace, NStep, NSteps, NTag, NTooltip, useDialog, useMessage } from 'naive-ui';
+import {
+  NButton,
+  NDataTable,
+  NDatePicker,
+  NSpace,
+  NStep,
+  NSteps,
+  NTag,
+  NTooltip,
+  useDialog,
+  useMessage
+} from 'naive-ui';
 import type { TagProps } from 'naive-ui';
 import { format } from 'sql-formatter';
 import {
@@ -269,7 +280,7 @@ const initWebSocket = () => {
         oscContent.value += result.data;
       } else {
         // Append content
-        oscContent.value += result.data + '\n';
+        oscContent.value += `${result.data}\n`;
       }
       // Auto refresh tasks on any message
       debouncedRefresh();
@@ -414,7 +425,7 @@ const resultColumns = computed<any[]>(() => [
           type: 'primary',
           secondary: true,
           // 禁用条件：工单不可执行 或 任务已完成 或 任务正在执行 或 是定时工单
-          disabled: !isOrderExecutable || isTaskCompleted || isTaskRunning || !!orderDetail.value?.schedule_time,
+          disabled: !isOrderExecutable || isTaskCompleted || isTaskRunning || Boolean(orderDetail.value?.schedule_time),
           onClick: () => handleExecuteSingle(row)
         },
         { default: () => '执行' }
@@ -646,7 +657,7 @@ const getTasks = async (force = false) => {
                 if (data.length > 1) {
                   historyLogs += `\n--- Task ${task.task_id} ---\n`;
                 }
-                historyLogs += resultObj.execute_log + '\n';
+                historyLogs += `${resultObj.execute_log}\n`;
               }
             } catch (e) {
               console.error('解析任务结果失败:', e);
@@ -1061,13 +1072,7 @@ const submitHook = async () => {
                   </div>
                   <div v-else class="flex items-center gap-2">
                     <span class="value">{{ orderDetail?.schedule_time }}</span>
-                    <NButton
-                      v-if="canEditSchedule"
-                      size="tiny"
-                      type="primary"
-                      text
-                      @click="handleStartEditSchedule"
-                    >
+                    <NButton v-if="canEditSchedule" size="tiny" type="primary" text @click="handleStartEditSchedule">
                       <template #icon>
                         <div class="i-ant-design:edit-outlined" />
                       </template>

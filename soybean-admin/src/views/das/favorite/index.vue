@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { h, onMounted, ref } from 'vue';
-import { useI18n } from 'vue-i18n';
 import { NButton } from 'naive-ui';
+import { useI18n } from 'vue-i18n';
 import { fetchDeleteFavorite, fetchFavorites } from '@/service/api/das';
 
 const props = defineProps<{

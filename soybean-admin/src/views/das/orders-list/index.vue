@@ -1,9 +1,9 @@
 <script setup lang="tsx">
 import { onMounted, onUnmounted, reactive, ref } from 'vue';
 import { NCard, NDataTable, NSwitch, NTag } from 'naive-ui';
+import { fetchOrdersList } from '@/service/api/orders';
 import { useAppStore } from '@/store/modules/app';
 import { useTable } from '@/hooks/common/table';
-import { fetchOrdersList } from '@/service/api/orders';
 import { useRouterPush } from '@/hooks/common/router';
 import { $t } from '@/locales';
 import OrderSearch from './modules/order-search.vue';
@@ -89,14 +89,7 @@ function handleReset() {
  * Table configuration
  * 表格配置
  */
-const {
-  columns,
-  data,
-  getData,
-  getDataByPage,
-  loading,
-  mobilePagination
-} = useTable({
+const { columns, data, getData, getDataByPage, loading, mobilePagination } = useTable({
   apiFn: fetchOrdersList,
   apiParams: searchParams,
   showTotal: true,
@@ -143,7 +136,11 @@ const {
       width: 100,
       render: row => {
         const color = getProgressTagColor(row.progress);
-        return <NTag type={color} size="small">{row.progress}</NTag>;
+        return (
+          <NTag type={color} size="small">
+            {row.progress}
+          </NTag>
+        );
       }
     },
     {
@@ -164,12 +161,18 @@ const {
         if (row.schedule_time) {
           return (
             <div style="display: flex; flex-direction: column; align-items: center; font-size: 12px;">
-              <NTag type="info" size="small" style="margin-bottom: 4px;">定时执行</NTag>
+              <NTag type="info" size="small" style="margin-bottom: 4px;">
+                定时执行
+              </NTag>
               <span style="color: #666;">{row.schedule_time}</span>
             </div>
           );
         }
-        return <NTag type="default" size="small">立即执行</NTag>;
+        return (
+          <NTag type="default" size="small">
+            立即执行
+          </NTag>
+        );
       }
     },
     {
@@ -196,7 +199,11 @@ const {
           dev: 'info'
         };
         const type = tagMap[row.environment] || 'default';
-        return <NTag type={type} size="small">{row.environment}</NTag>;
+        return (
+          <NTag type={type} size="small">
+            {row.environment}
+          </NTag>
+        );
       }
     },
     {

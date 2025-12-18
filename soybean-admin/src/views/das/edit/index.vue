@@ -12,7 +12,7 @@ import SvgIcon from '@/components/custom/svg-icon.vue';
 // CodeMirror 6 imports
 import { EditorState, Compartment } from '@codemirror/state';
 import { EditorView, keymap, lineNumbers } from '@codemirror/view';
-import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
+import { defaultKeymap, history, historyKeymap, indentWithTab, insertNewlineAndIndent } from '@codemirror/commands';
 import { sql } from '@codemirror/lang-sql';
 import { foldGutter, foldKeymap, syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language';
 import { oneDark } from '@codemirror/theme-one-dark';
@@ -216,15 +216,201 @@ function schemaForCompletion(): Record<string, string[]> {
   return tablesMap;
 }
 
-// 额外的表名补全源：在任意位置为词前缀提供表名提示，不覆盖内置来源
-function tableNameCompletion(context: any) {
-  const before = context.matchBefore(/\w+$/);
-  if (!before) return null;
-  const tablesMap = (tabCompletion.value?.tables || {}) as Record<string, string[]>;
-  const names = Object.keys(tablesMap);
-  if (names.length === 0) return null;
-  const options = names.map((name) => ({ label: name, type: 'variable', boost: -10 }));
-  return { from: before.from, options };
+// 自定义SQL补全逻辑：支持表名（带注释）和字段名（带类型）
+function customSQLCompletion(context: any) {
+  const metadata = tabCompletion.value?.metadata || { tables: {} };
+  
+  // 1. 尝试匹配 "Table.Column" 模式 (检测点号)
+  // 匹配：前面是单词，紧接一个点，然后是可选的当前输入
+  const dotMatch = context.matchBefore(/(\w+)\.(\w*)$/);
+  
+  if (dotMatch) {
+    const tableName = dotMatch.text.split('.')[0];
+    const tableInfo = metadata.tables[tableName];
+    
+    if (tableInfo && tableInfo.columns) {
+      const options = tableInfo.columns.map((col: any) => ({
+        label: col.name,
+        type: 'property',
+        detail: col.type, // 显示字段类型
+        boost: 10 // 提高优先级
+      }));
+      
+      return {
+        from: dotMatch.from + tableName.length + 1, //补全起点在点号之后
+        options,
+        validFor: /^\w*$/
+      };
+    }
+  }
+
+  // 2. 默认模式：提示表名 + 上下文相关字段
+  // 将 \w+ 改为 \w* 以支持光标在空格后立即触发提示（此时匹配为空字符串）
+  const wordMatch = context.matchBefore(/\w*$/);
+  
+  if (wordMatch) {
+    // 只有当明确处于单词输入中或为空匹配（如空格后）时才继续
+    // 如果需要更严格的空格触发，可以检查 context.explicit 或上一个字符是否为空格
+    
+    const tableNames = Object.keys(metadata.tables);
+    if (tableNames.length === 0) return null;
+    
+    const options: any[] = [];
+    
+    // 扫描当前文档中出现过的表名（上下文感知）
+    const docText = context.state.doc.toString();
+    const foundWords = new Set(docText.match(/\b\w+\b/g) || []);
+    
+    // 检测当前上下文是否处于 FROM 或 JOIN 之后
+    // 使用关键字检测代替简单的正则，以避免 "FROM table WHERE" 被误判
+    const textBefore = context.state.sliceDoc(0, context.pos);
+    const lastKeywordMatch = textBefore.match(/\b(SELECT|FROM|JOIN|WHERE|GROUP\s+BY|ORDER\s+BY|LIMIT|SET|UPDATE|DELETE|INSERT|HAVING|ON|AND|OR)\b/gi);
+    const lastKeyword = lastKeywordMatch ? lastKeywordMatch[lastKeywordMatch.length - 1].toUpperCase().replace(/\s+/g, ' ') : '';
+    
+    const isTableContext = ['FROM', 'JOIN', 'UPDATE', 'INTO'].includes(lastKeyword);
+    const isConditionContext = ['WHERE', 'HAVING', 'ON', 'AND', 'OR'].includes(lastKeyword);
+    const isSelectContext = lastKeyword === 'SELECT';
+
+    // 获取当前正在输入的单词之前的上一个有效 token (用于判断是否刚输入完字段)
+    const textBeforeCurrentWord = context.state.sliceDoc(0, wordMatch.from);
+
+    // 用户反馈：= 号后面不应该弹出提示（通常是在输入值）
+    // 仅在自动触发时屏蔽，如果用户按快捷键强制触发则允许
+    if (!context.explicit && /[=<>!]+\s*$/.test(textBeforeCurrentWord)) {
+      return null;
+    }
+
+    const prevTokenMatch = textBeforeCurrentWord.match(/([`"']?[\w.]+\b[`"']?)\s*$/);
+    const prevToken = prevTokenMatch ? prevTokenMatch[1].replace(/[`"']/g, '') : '';
+    // 处理 Table.Field 格式，只取 Field 部分
+    const prevTokenField = prevToken.includes('.') ? prevToken.split('.').pop() : prevToken;
+
+    // 收集所有已知的字段名，用于判断 prevToken 是否为字段
+    const allColumnNames = new Set<string>();
+    Object.values(metadata.tables).forEach((t: any) => {
+      if (t.columns) {
+        t.columns.forEach((c: any) => allColumnNames.add(c.name));
+      }
+    });
+
+    // C. 如果处于条件上下文且上一个词是字段名，提示运算符
+    if (isConditionContext && allColumnNames.has(prevTokenField)) {
+       const operators = [
+         { label: '=', type: 'keyword', detail: 'Operator', boost: 40 }, // 优先级最高
+         { label: '!=', type: 'keyword', detail: 'Operator', boost: 35 },
+         { label: '<>', type: 'keyword', detail: 'Operator', boost: 35 },
+         { label: '>', type: 'keyword', detail: 'Operator', boost: 30 },
+         { label: '>=', type: 'keyword', detail: 'Operator', boost: 30 },
+         { label: '<', type: 'keyword', detail: 'Operator', boost: 30 },
+         { label: '<=', type: 'keyword', detail: 'Operator', boost: 30 },
+         { label: 'IN', type: 'keyword', detail: 'Operator', boost: 28 },
+         { label: 'LIKE', type: 'keyword', detail: 'Operator', boost: 28 },
+         { label: 'NOT IN', type: 'keyword', detail: 'Operator', boost: 28 },
+         { label: 'IS NULL', type: 'keyword', detail: 'Operator', boost: 28 },
+         { label: 'IS NOT NULL', type: 'keyword', detail: 'Operator', boost: 28 }
+       ];
+       options.push(...operators);
+    }
+
+    // D. 如果处于 SELECT 上下文，提示聚合函数和常用常量
+    if (isSelectContext) {
+       // 检测是否刚刚输入了 *
+       const isAfterStar = /\*\s*$/.test(textBeforeCurrentWord);
+       
+       if (isAfterStar) {
+          // 如果在 * 后面，优先提示 FROM
+          const afterStarOptions = [
+            { label: 'FROM', type: 'keyword', detail: 'Keyword', boost: 60 },
+            { label: 'FALSE', type: 'keyword', detail: 'Boolean', boost: 40 },
+            { label: 'TRUE', type: 'keyword', detail: 'Boolean', boost: 40 },
+            { label: 'UNKNOWN', type: 'keyword', detail: 'Value', boost: 40 },
+            { label: 'NULL', type: 'keyword', detail: 'Value', boost: 40 },
+            { label: 'ALTER', type: 'keyword', detail: 'Keyword', boost: 30 },
+            { label: 'AND', type: 'keyword', detail: 'Keyword', boost: 30 },
+            { label: 'BY', type: 'keyword', detail: 'Keyword', boost: 30 },
+            { label: 'CREATE', type: 'keyword', detail: 'Keyword', boost: 30 },
+            { label: 'COLUMN', type: 'keyword', detail: 'Keyword', boost: 30 },
+            { label: 'COUNT()', type: 'function', detail: 'Function', boost: 30 },
+            { label: 'BETWEEN', type: 'keyword', detail: 'Keyword', boost: 30 }
+          ];
+          options.push(...afterStarOptions);
+       } else {
+          // 正常的 SELECT 上下文提示
+          const selectOptions = [
+            { label: '*', type: 'keyword', detail: 'All Columns', boost: 50 },
+            { label: 'DISTINCT()', type: 'function', detail: 'Function', boost: 45 },
+            { label: 'COUNT()', type: 'function', detail: 'Function', boost: 45 },
+            { label: 'MAX()', type: 'function', detail: 'Function', boost: 45 },
+            { label: 'MIN()', type: 'function', detail: 'Function', boost: 45 },
+            { label: 'SUM()', type: 'function', detail: 'Function', boost: 45 },
+            { label: 'FALSE', type: 'keyword', detail: 'Boolean', boost: 40 },
+            { label: 'TRUE', type: 'keyword', detail: 'Boolean', boost: 40 },
+            { label: 'UNKNOWN', type: 'keyword', detail: 'Value', boost: 40 },
+            { label: 'NULL', type: 'keyword', detail: 'Value', boost: 40 }
+          ];
+          options.push(...selectOptions);
+       }
+    }
+
+    // E. 如果上一个词是表名，提示连接查询关键字和 WHERE
+    // 检查 metadata.tables 中是否存在该表名
+    if (metadata.tables[prevToken]) {
+       const afterTableOptions = [
+         { label: 'WHERE', type: 'keyword', detail: 'Keyword', boost: 60 },
+         { label: ',', type: 'keyword', detail: 'Separator', boost: 55 },
+         { label: 'INNER', type: 'keyword', detail: 'Keyword', boost: 50 },
+         { label: 'OUTER', type: 'keyword', detail: 'Keyword', boost: 50 },
+         { label: 'LEFT()', type: 'function', detail: 'Function', boost: 50 },
+         { label: 'RIGHT()', type: 'function', detail: 'Function', boost: 50 },
+         { label: 'CROSS', type: 'keyword', detail: 'Keyword', boost: 45 },
+         { label: 'JOIN', type: 'keyword', detail: 'Keyword', boost: 45 },
+         { label: 'STRAIGHT_JOIN', type: 'keyword', detail: 'Keyword', boost: 45 },
+         { label: 'FALSE', type: 'keyword', detail: 'Boolean', boost: 40 },
+         { label: 'TRUE', type: 'keyword', detail: 'Boolean', boost: 40 },
+         { label: 'UNKNOWN', type: 'keyword', detail: 'Value', boost: 40 }
+       ];
+       options.push(...afterTableOptions);
+    }
+
+    tableNames.forEach((name) => {
+      const info = metadata.tables[name];
+      
+      // A. 添加所有表名
+      // 如果处于 FROM/JOIN 后，大幅提升表名的优先级，使其排在最前
+      const tableBoost = isTableContext ? 20 : -1;
+      
+      options.push({
+        label: name,
+        type: 'class', // 图标通常为类/表
+        detail: info?.comment || '表', // 优先显示注释，否则显示中文'表'
+        boost: tableBoost 
+      });
+
+      // B. 如果该表在文档中出现过，添加其字段
+      if (foundWords.has(name) && info.columns) {
+        info.columns.forEach((col: any) => {
+          // 如果处于 FROM/JOIN 后，降低字段优先级，避免干扰表选择
+          // 否则保持较高优先级方便 SELECT/WHERE
+          const colBoost = isTableContext ? -5 : 20;
+          
+          options.push({
+            label: col.name,
+            type: 'property',
+            detail: `${col.type} · ${name}`, // 优化显示格式：类型 · 表名
+            boost: colBoost 
+          });
+        });
+      }
+    });
+    
+    return {
+      from: wordMatch.from,
+      options,
+      validFor: /^\w*$/
+    };
+  }
+
+  return null;
 }
 
 function createEditor(pane: EditorPane, el: HTMLElement) {
@@ -241,6 +427,10 @@ function createEditor(pane: EditorPane, el: HTMLElement) {
       (themeCompartments.value[pane.key] = new Compartment()).of(getThemeExtension(pane.theme)),
       history(),
       keymap.of([
+        {
+          key: 'Enter',
+          run: insertNewlineAndIndent
+        },
         ...defaultKeymap,
         ...historyKeymap,
         ...foldKeymap,
@@ -255,9 +445,9 @@ function createEditor(pane: EditorPane, el: HTMLElement) {
         }
       ]),
       // 使用默认内置补全来源，并启用输入时触发
-      autocompletion({ activateOnTyping: true }),
-      // 以语言数据形式注入额外的表名补全源（不会覆盖内置来源）
-      EditorState.languageData.of(() => [{ autocomplete: tableNameCompletion }]),
+      autocompletion({ activateOnTyping: true, maxRenderedOptions: 50 }),
+      // 以语言数据形式注入额外的自定义补全源
+      EditorState.languageData.of(() => [{ autocomplete: customSQLCompletion }]),
       EditorView.updateListener.of((v) => {
         if (v.docChanged) {
           const text = v.state.doc.toString();
@@ -528,6 +718,13 @@ const renderTree = (grants: any, data: any[]) => {
     });
     
     tmpTabCompletion['tables'][row['table_name']] = columnsCompletion;
+    
+    // 存储额外的元数据供自定义补全使用
+    if (!tmpTabCompletion['metadata']) tmpTabCompletion['metadata'] = { tables: {}, columns: {} };
+    tmpTabCompletion['metadata'].tables[row['table_name']] = {
+      comment: row.table_comment || '',
+      columns: tmpColumnsData.map(c => ({ name: c.label, type: c.colType }))
+    };
   });
   
   treeData.value = tmpTreeData;

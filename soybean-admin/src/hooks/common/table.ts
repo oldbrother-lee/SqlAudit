@@ -47,26 +47,28 @@ export function useTable<A extends NaiveUI.TableApiFn>(config: NaiveUI.NaiveTabl
     apiFn,
     apiParams,
     columns: config.columns,
-    transformer: transformer || (res => {
-      const { records = [], current = 1, size = 10, total = 0 } = res.data || {};
+    transformer:
+      transformer ||
+      (res => {
+        const { records = [], current = 1, size = 10, total = 0 } = res.data || {};
 
-      // Ensure that the size is greater than 0, If it is less than 0, it will cause paging calculation errors.
-      const pageSize = size <= 0 ? 10 : size;
+        // Ensure that the size is greater than 0, If it is less than 0, it will cause paging calculation errors.
+        const pageSize = size <= 0 ? 10 : size;
 
-      const recordsWithIndex = records.map((item, index) => {
+        const recordsWithIndex = records.map((item, index) => {
+          return {
+            ...item,
+            index: (current - 1) * pageSize + index + 1
+          };
+        });
+
         return {
-          ...item,
-          index: (current - 1) * pageSize + index + 1
+          data: recordsWithIndex,
+          pageNum: current,
+          pageSize,
+          total
         };
-      });
-
-      return {
-        data: recordsWithIndex,
-        pageNum: current,
-        pageSize,
-        total
-      };
-    }),
+      }),
     getColumnChecks: cols => {
       const checks: NaiveUI.TableColumnCheck[] = [];
 
@@ -130,7 +132,7 @@ export function useTable<A extends NaiveUI.TableApiFn>(config: NaiveUI.NaiveTabl
     pageSize: 10,
     showSizePicker: true,
     itemCount: 0,
-    pageSizes: [10,  20, 50, 100],
+    pageSizes: [10, 20, 50, 100],
     ...(paginationConfig as PaginationProps),
     onUpdatePage: async (page: number) => {
       pagination.page = page;

@@ -99,7 +99,7 @@ export const useAuthStore = defineStore(SetupStoreId.Auth, () => {
   async function login(userName: string, password: string, redirect = true) {
     startLoading();
     const { data: loginToken, error, response } = await fetchLogin(userName, password);
-    
+
     // Fix: Handle flat response structure where data wrapper might be missing
     let finalLoginToken = loginToken;
     if (!finalLoginToken && !error && (response?.data as any)?.token) {

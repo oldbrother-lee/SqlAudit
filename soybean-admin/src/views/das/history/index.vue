@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, h, onMounted, reactive, ref, watch } from 'vue';
-import { useI18n } from 'vue-i18n';
 import { NButton, NTag } from 'naive-ui';
+import { useI18n } from 'vue-i18n';
 import { fetchCreateFavorite, fetchHistory } from '@/service/api/das';
 
 const props = defineProps<{
@@ -214,7 +214,13 @@ const columns: any[] = [
           <NEmpty description="暂无历史查询记录" />
         </div>
         <div v-else>
-          <NDataTable :columns="columns" :data="filteredHistory" size="small" :pagination="pagination" :scroll-x="1200" />
+          <NDataTable
+            :columns="columns"
+            :data="filteredHistory"
+            size="small"
+            :pagination="pagination"
+            :scroll-x="1200"
+          />
         </div>
       </NSpin>
     </NCard>
