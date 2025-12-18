@@ -1,5 +1,5 @@
 <script setup lang="tsx">
-import { computed, h, onMounted, onUnmounted, reactive, ref } from 'vue';
+import { onMounted, onUnmounted, reactive, ref } from 'vue';
 import { NCard, NDataTable, NSwitch, NTag } from 'naive-ui';
 import { useAppStore } from '@/store/modules/app';
 import { useTable } from '@/hooks/common/table';
@@ -11,7 +11,13 @@ import OrderSearch from './modules/order-search.vue';
 const appStore = useAppStore();
 const { routerPushByKey } = useRouterPush();
 
-const searchParams = reactive({
+/**
+ * Order search parameters
+ * 工单搜索参数
+ */
+const searchParams = reactive<Api.Orders.OrderSearchParams>({
+  current: 1,
+  size: 10,
   environment: null,
   status: null,
   search: null,
@@ -20,11 +26,69 @@ const searchParams = reactive({
 
 const onlyMyOrders = ref(false);
 
+/**
+ * Handle "Only My Orders" switch change
+ * 处理“只看我的”开关变化
+ * @param val boolean value
+ */
 function handleMyOrdersChange(val: boolean) {
   searchParams.only_my_orders = val ? 1 : 0;
   getDataByPage();
 }
 
+/**
+ * Get progress tag color
+ * 获取进度标签颜色
+ * @param progress Progress status string
+ * @returns NaiveUI theme color
+ */
+function getProgressTagColor(progress: string): NaiveUI.ThemeColor {
+  switch (progress) {
+    case '待审批':
+    case '待执行':
+      return 'warning';
+    case '已驳回':
+    case '已失败':
+      return 'error';
+    case '执行中':
+      return 'info';
+    case '已完成':
+      return 'success';
+    default:
+      return 'default';
+  }
+}
+
+/**
+ * Handle row click
+ * 处理行点击
+ * @param row Order data
+ */
+function handleRowClick(row: Api.Orders.Order) {
+  routerPushByKey('das_orders-detail', { params: { id: row.order_id } });
+}
+
+const rowProps = (row: Api.Orders.Order) => {
+  return {
+    style: 'cursor: pointer;',
+    onClick: () => handleRowClick(row)
+  };
+};
+
+/**
+ * Reset search parameters
+ * 重置搜索参数
+ */
+function handleReset() {
+  onlyMyOrders.value = false;
+  searchParams.only_my_orders = 0;
+  getDataByPage();
+}
+
+/**
+ * Table configuration
+ * 表格配置
+ */
 const {
   columns,
   data,
@@ -42,36 +106,26 @@ const {
     showQuickJumper: true
   },
   transformer: res => {
-    const responseData = (res.data || {}) as any;
-    let records: any[] = [];
-    let current = 1;
-    let size = (searchParams as any).size || 10;
-    let total = 0;
+    // response from requestRaw contains { code, message, data, total }
+    // res.data is the records array
+    // res.total is the total count
+    const responseData = res as any;
+    const records = responseData.data || [];
+    const total = responseData.total || 0;
+    const current = searchParams.current;
+    const size = searchParams.size;
 
-    if (Array.isArray(responseData)) {
-      console.log('responseData', responseData);
-      records = responseData;
-      total = records.length;
-    } else {
-      records = responseData.records || responseData.items || responseData.rows || responseData.list || responseData.data || [];
-      current = Number(responseData.current || responseData.page || responseData.page_num || 1);
-      size = Number(responseData.size || responseData.pageSize || responseData.page_size || (searchParams as any).size || 10);
-      total = Number(responseData.total || responseData.count || responseData.total_count || 0);
-    }
-
-    const pageSize = size <= 0 ? 10 : size;
-
-    const recordsWithIndex = records.map((item, index) => {
+    const recordsWithIndex = records.map((item: any, index: number) => {
       return {
         ...item,
-        index: (current - 1) * pageSize + index + 1
+        index: (current - 1) * size + index + 1
       };
     });
 
     return {
       data: recordsWithIndex,
       pageNum: current,
-      pageSize,
+      pageSize: size,
       total
     };
   },
@@ -172,44 +226,11 @@ const {
   ]
 });
 
-function getProgressTagColor(progress: string): NaiveUI.ThemeColor {
-  switch (progress) {
-    case '待审批':
-    case '待执行':
-      return 'warning';
-    case '已驳回':
-    case '已失败':
-      return 'error';
-    case '执行中':
-      return 'info';
-    case '已完成':
-      return 'success';
-    default:
-      return 'default';
-  }
-}
-
-function handleRowClick(row: Api.Orders.Order) {
-  routerPushByKey('das_orders-detail', { params: { id: row.order_id } });
-}
-
-const rowProps = (row: Api.Orders.Order) => {
-  return {
-    style: 'cursor: pointer;',
-    onClick: () => handleRowClick(row)
-  };
-};
-
-function handleReset() {
-  onlyMyOrders.value = false;
-  searchParams.only_my_orders = 0;
-  getDataByPage();
-}
-
+// Auto refresh timer
 let refreshTimer: ReturnType<typeof setInterval> | null = null;
 
 onMounted(() => {
-  // 自动刷新
+  // Auto refresh every 30 seconds
   refreshTimer = setInterval(() => {
     getData();
   }, 30000);

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, nextTick, onUnmounted, h, watch, markRaw, toRaw } from 'vue';
+import { useResizeObserver } from '@vueuse/core';
 import { useI18n } from 'vue-i18n';
 import { format } from 'sql-formatter';
 import { fetchExecuteMySQLQuery, fetchExecuteClickHouseQuery, fetchSchemas, fetchTables, fetchUserGrants, fetchDBDict, fetchTableInfo } from '@/service/api/das';
@@ -1280,6 +1281,21 @@ const handleNodeDblClick = (key: string) => {
   p.sql = p.sql && p.sql.length > 0 ? `${p.sql}\n\n${query}` : query;
 };
 
+// 左右高度同步逻辑
+const rightContainerRef = ref<HTMLElement | null>(null);
+const leftContainerStyle = ref({ height: 'auto', overflowY: 'auto' });
+
+useResizeObserver(rightContainerRef, (entries) => {
+  const entry = entries[0];
+  const { height } = entry.contentRect;
+  if (height > 0) {
+    leftContainerStyle.value = {
+      height: `${height}px`,
+      overflowY: 'auto'
+    };
+  }
+});
+
 onMounted(async () => {
   await getSchemas();
   loadPaneFromCache(currentPane.value);
@@ -1290,10 +1306,10 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <NCard size="small" class="das-page" :content-style="{ padding: '12px' }">
+  <NCard size="small" class="das-page" :content-style="{ padding: '12px' }" style="height: auto; min-height: calc(100vh - 120px)">
     <NGrid cols="24" x-gap="12" y-gap="12" style="height: 100%">
       <NGi v-if="showLeftPanel" span="7">
-        <NCard size="small" title="数据库选择" :segmented="{ content: true }" class="das-left-card" :content-style="{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }">
+        <NCard size="small" title="数据库选择" :segmented="{ content: true }" class="das-left-card" :style="leftContainerStyle" :content-style="{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }">
           <template #header-extra>
             <NSpace :size="6">
               <NTooltip trigger="hover" placement="top" :show-arrow="false">
@@ -1358,7 +1374,7 @@ onUnmounted(() => {
         </NCard>
       </NGi>
       <NGi :span="rightSpan">
-        <div style="display: flex; flex-direction: column; height: 100%; gap: 12px">
+        <div ref="rightContainerRef" style="display: flex; flex-direction: column; height: 100%; gap: 12px">
           <NCard v-if="!showLeftPanel" size="small" class="das-ghost-card" :bordered="false">
             <NButton quaternary size="small" @click="foldLeft">
               <template #icon><SvgIcon icon="line-md:menu-fold-right" /></template>
