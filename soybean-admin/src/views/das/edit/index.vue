@@ -258,12 +258,14 @@ const customAutocompleteTheme = EditorView.theme({
   },
   // 图标通用样式
   '.cm-completionIcon': {
+    display: 'inline-block',
     width: '16px',
     height: '16px',
     marginRight: '8px',
     backgroundRepeat: 'no-repeat',
     backgroundSize: 'contain',
     backgroundPosition: 'center',
+    verticalAlign: 'middle',
     opacity: '0.8'
   },
   // 表格图标 (绿色网格)
@@ -1752,17 +1754,18 @@ onUnmounted(() => {
                           </NSpace>
                         </div>
                         <div v-if="pane.result">
-                          <div v-if="getTableData(pane).length > 0">
-                            <vxe-table
-                              :data="getPagedTableData(pane)"
-                              border
-                              stripe
-                              :height="400"
-                              :column-config="{ resizable: true }"
-                              :resizable-config="{ showDragTip: false }"
-                              :scroll-y="{ enabled: true }"
-                              show-overflow
-                            >
+                          <div v-if="getTableColumns(pane).length > 0">
+                          <vxe-table
+                            :data="getPagedTableData(pane)"
+                            border
+                            stripe
+                            :height="400"
+                            :column-config="{ resizable: true }"
+                            :resizable-config="{ showDragTip: false }"
+                            :scroll-y="{ enabled: true }"
+                            show-overflow
+                            empty-text="暂无数据"
+                          >
                               <vxe-column
                                 v-for="col in getVisibleColumns(pane)"
                                 :key="col.key"
