@@ -211,6 +211,87 @@ function getThemeExtension(theme: string) {
   return [syntaxHighlighting(defaultHighlightStyle, { fallback: true })];
 }
 
+// 自定义自动补全主题
+const customAutocompleteTheme = EditorView.theme({
+  '.cm-tooltip.cm-tooltip-autocomplete': {
+    border: 'none',
+    borderRadius: '4px',
+    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
+    backgroundColor: 'rgb(var(--container-bg-color))', // 使用容器背景色变量
+    color: 'rgb(var(--base-text-color))', // 使用基础文本颜色变量
+    minWidth: '250px'
+  },
+  '.cm-tooltip-autocomplete > ul > li': {
+    display: 'flex',
+    alignItems: 'center',
+    padding: '4px 8px',
+    lineHeight: '1.5',
+    fontFamily: 'Menlo, Monaco, "Courier New", monospace',
+    fontSize: '13px',
+    cursor: 'pointer'
+  },
+  '.cm-tooltip-autocomplete > ul > li[aria-selected]': {
+    backgroundColor: 'rgb(var(--primary-color))', // 使用主题色变量
+    color: '#fff'
+  },
+  '.cm-tooltip-autocomplete > ul > li[aria-selected] .cm-completionDetail': {
+    color: 'rgba(255, 255, 255, 0.85)'
+  },
+  '.cm-completionLabel': {
+    fontWeight: '500',
+    marginRight: '8px'
+  },
+  '.cm-completionDetail': {
+    marginLeft: 'auto',
+    color: 'rgb(var(--base-text-color))', // 使用文本颜色
+    opacity: '0.6',
+    fontSize: '12px',
+    fontStyle: 'normal'
+  },
+  '.cm-completionMatchedText': {
+    textDecoration: 'none',
+    fontWeight: 'bold',
+    color: 'rgb(var(--primary-color))' // 使用主题色变量
+  },
+  '.cm-tooltip-autocomplete > ul > li[aria-selected] .cm-completionMatchedText': {
+    color: '#fff'
+  },
+  // 图标通用样式
+  '.cm-completionIcon': {
+    width: '16px',
+    height: '16px',
+    marginRight: '8px',
+    backgroundRepeat: 'no-repeat',
+    backgroundSize: 'contain',
+    backgroundPosition: 'center',
+    opacity: '0.8'
+  },
+  // 表格图标 (绿色网格)
+  '.cm-completionIcon-table': {
+    backgroundImage: `url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMTBiOTgxIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCI+PHJlY3QgeD0iMyIgeT0iMyIgd2lkdGg9IjE4IiBoZWlnaHQ9IjE4IiByeD0iMiIgcnk9IjIiPjwvcmVjdD48bGluZSB4MT0iMyIgeTE9IjkiIHgyPSIyMSIgeTI9IjkiPjwvbGluZT48bGluZSB4MT0iMyIgeTE9IjE1IiB4Mj0iMjEiIHkyPSIxNSI+PC9saW5lPjxsaW5lIHgxPSI5IiB5MT0iMyIgeDI9IjkiIHkyPSIyMSI+PC9saW5lPjwvc3ZnPg==')`
+  },
+  // 字段图标 (蓝色属性)
+  '.cm-completionIcon-column': {
+    backgroundImage: `url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjM2I4MmY2IiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCI+PHBhdGggZD0iTTIwLjI0IDEyLjI0YTYgNiAwIDAgMC04LjQ5LTguNDlMNSAxMC41VjE5aDguNXoiPjwvcGF0aD48bGluZSB4MT0iMTYiIHkxPSI4IiB4Mj0iMiIgeTI9IjIyIj48L2xpbmU+PGxpbmUgeDE9IjE3LjUiIHkxPSIxNSIgeDI9IjkiIHkyPSIxNSI+PC9saW5lPjwvc3ZnPg==')`
+  },
+  // 关键字图标 (橙色 Key)
+  '.cm-completionIcon-keyword': {
+    // 使用 Lucide Key 图标
+    backgroundImage: `url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjZjU5ZTBiIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCI+PGNpcmNsZSBjeD0iNy41IiBjeT0iMTUuNSIgcj0iNS41Ii8+PHBhdGggZD0ibTIxIDItOSA5Ii8+PHBhdGggZD0ibTIxIDJ2NmgtNnYiLz48L3N2Zz4=')`
+  },
+  // 函数图标 (紫色 Function)
+  '.cm-completionIcon-function': {
+    // 使用 Lucide Function Square (f in box)
+    backgroundImage: `url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjYTg1NWY3IiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCI+PHJlY3Qgd2lkdGg9IjE4IiBoZWlnaHQ9IjE4IiB4PSIzIiB5PSIzIiByeD0iMiIgcnk9IjIiLz48cGF0aCBkPSJNOSAxN2MyIDAgMi0yIDItMiIvPjxwYXRoIGQ9Ik05IDEyaDZtLTEgMHYtMy41YzAtMSAuNS0xLjUgMS41LTEuNSIvPjwvc3ZnPg==')`
+  },
+  // 常量/值图标 (青色)
+  '.cm-completionIcon-constant': {
+    backgroundImage: `url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMDZMQjU2IiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCI+PGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTAiLz48cGF0aCBkPSJtOSAxMiAyIDIgNC00Ii8+PC9zdmc+')` // Check Circle
+  },
+  // 隐藏默认的内容（如果有冲突）
+  '.cm-completionIcon::after': { display: 'none' }
+});
+
 function schemaForCompletion(): Record<string, string[]> {
   const tablesMap = (tabCompletion.value?.tables || {}) as Record<string, string[]>;
   return tablesMap;
@@ -231,7 +312,7 @@ function customSQLCompletion(context: any) {
     if (tableInfo && tableInfo.columns) {
       const options = tableInfo.columns.map((col: any) => ({
         label: col.name,
-        type: 'property',
+        type: 'column',
         detail: col.type, // 显示字段类型
         boost: 10 // 提高优先级
       }));
@@ -321,10 +402,10 @@ function customSQLCompletion(context: any) {
           // 如果在 * 后面，优先提示 FROM
           const afterStarOptions = [
             { label: 'FROM', type: 'keyword', detail: 'Keyword', boost: 60 },
-            { label: 'FALSE', type: 'keyword', detail: 'Boolean', boost: 40 },
-            { label: 'TRUE', type: 'keyword', detail: 'Boolean', boost: 40 },
-            { label: 'UNKNOWN', type: 'keyword', detail: 'Value', boost: 40 },
-            { label: 'NULL', type: 'keyword', detail: 'Value', boost: 40 },
+            { label: 'FALSE', type: 'constant', detail: 'Boolean', boost: 40 },
+            { label: 'TRUE', type: 'constant', detail: 'Boolean', boost: 40 },
+            { label: 'UNKNOWN', type: 'constant', detail: 'Value', boost: 40 },
+            { label: 'NULL', type: 'constant', detail: 'Value', boost: 40 },
             { label: 'ALTER', type: 'keyword', detail: 'Keyword', boost: 30 },
             { label: 'AND', type: 'keyword', detail: 'Keyword', boost: 30 },
             { label: 'BY', type: 'keyword', detail: 'Keyword', boost: 30 },
@@ -343,10 +424,10 @@ function customSQLCompletion(context: any) {
             { label: 'MAX()', type: 'function', detail: 'Function', boost: 45 },
             { label: 'MIN()', type: 'function', detail: 'Function', boost: 45 },
             { label: 'SUM()', type: 'function', detail: 'Function', boost: 45 },
-            { label: 'FALSE', type: 'keyword', detail: 'Boolean', boost: 40 },
-            { label: 'TRUE', type: 'keyword', detail: 'Boolean', boost: 40 },
-            { label: 'UNKNOWN', type: 'keyword', detail: 'Value', boost: 40 },
-            { label: 'NULL', type: 'keyword', detail: 'Value', boost: 40 }
+            { label: 'FALSE', type: 'constant', detail: 'Boolean', boost: 40 },
+            { label: 'TRUE', type: 'constant', detail: 'Boolean', boost: 40 },
+            { label: 'UNKNOWN', type: 'constant', detail: 'Value', boost: 40 },
+            { label: 'NULL', type: 'constant', detail: 'Value', boost: 40 }
           ];
           options.push(...selectOptions);
        }
@@ -365,9 +446,9 @@ function customSQLCompletion(context: any) {
          { label: 'CROSS', type: 'keyword', detail: 'Keyword', boost: 45 },
          { label: 'JOIN', type: 'keyword', detail: 'Keyword', boost: 45 },
          { label: 'STRAIGHT_JOIN', type: 'keyword', detail: 'Keyword', boost: 45 },
-         { label: 'FALSE', type: 'keyword', detail: 'Boolean', boost: 40 },
-         { label: 'TRUE', type: 'keyword', detail: 'Boolean', boost: 40 },
-         { label: 'UNKNOWN', type: 'keyword', detail: 'Value', boost: 40 }
+         { label: 'FALSE', type: 'constant', detail: 'Boolean', boost: 40 },
+         { label: 'TRUE', type: 'constant', detail: 'Boolean', boost: 40 },
+         { label: 'UNKNOWN', type: 'constant', detail: 'Value', boost: 40 }
        ];
        options.push(...afterTableOptions);
     }
@@ -381,7 +462,7 @@ function customSQLCompletion(context: any) {
       
       options.push({
         label: name,
-        type: 'class', // 图标通常为类/表
+        type: 'table', // 图标通常为类/表
         detail: info?.comment || '表', // 优先显示注释，否则显示中文'表'
         boost: tableBoost 
       });
@@ -395,7 +476,7 @@ function customSQLCompletion(context: any) {
           
           options.push({
             label: col.name,
-            type: 'property',
+            type: 'column',
             detail: `${col.type} · ${name}`, // 优化显示格式：类型 · 表名
             boost: colBoost 
           });
@@ -425,6 +506,8 @@ function createEditor(pane: EditorPane, el: HTMLElement) {
       (languageCompartments.value[pane.key] = new Compartment()).of(sql({ schema: schemaForCompletion(), upperCaseKeywords: true })),
       // 主题通过 Compartment 动态配置
       (themeCompartments.value[pane.key] = new Compartment()).of(getThemeExtension(pane.theme)),
+      // 注入自定义补全主题样式
+      customAutocompleteTheme,
       history(),
       keymap.of([
         {
