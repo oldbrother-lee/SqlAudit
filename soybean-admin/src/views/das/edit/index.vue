@@ -202,13 +202,49 @@ const editorViews = ref<Record<string, EditorView | null>>({});
 const themeCompartments = ref<Record<string, Compartment>>({});
 const languageCompartments = ref<Record<string, Compartment>>({});
 
+// 检查是否是黑暗模式
+function isDarkMode(): boolean {
+  return document.documentElement.classList.contains('dark');
+}
+
+// 黑暗模式光标主题 - 使用 baseTheme 确保优先级
+const darkCursorTheme = EditorView.theme({
+  '.cm-cursor': {
+    borderLeft: '1.2px solid #ffffff !important'
+  },
+  '.cm-cursor-primary': {
+    borderLeft: '1.2px solid #ffffff !important'
+  },
+  '&.cm-focused > .cm-scroller > .cm-cursorLayer .cm-cursor': {
+    borderLeft: '1.2px solid #ffffff !important'
+  },
+  '.cm-content': {
+    caretColor: '#ffffff !important'
+  }
+}, { dark: true });
+
+// 浅色模式光标主题
+const lightCursorTheme = EditorView.theme({
+  '.cm-cursor': {
+    borderLeft: '1.2px solid #000000'
+  },
+  '.cm-cursor-primary': {
+    borderLeft: '1.2px solid #000000'
+  },
+  '.cm-content': {
+    caretColor: '#000000'
+  }
+});
+
 function getThemeExtension(theme: string) {
+  const isDark = isDarkMode();
   // 仅在暗色主题时启用 oneDark，其余使用默认浅色
-  if (theme === 'vs-dark' || theme === 'hc-black') {
-    return oneDark;
+  if (theme === 'vs-dark' || theme === 'hc-black' || isDark) {
+    // 将光标主题放在最后，确保覆盖 oneDark 的设置
+    return [oneDark, darkCursorTheme];
   }
   // 浅色主题下启用默认的语法高亮样式
-  return [syntaxHighlighting(defaultHighlightStyle, { fallback: true })];
+  return [syntaxHighlighting(defaultHighlightStyle, { fallback: true }), lightCursorTheme];
 }
 
 // 自定义自动补全主题
@@ -630,6 +666,18 @@ watch(
   },
   { deep: true }
 );
+
+// 监听dark模式切换，更新所有编辑器的主题
+const darkModeObserver = new MutationObserver(() => {
+  Object.entries(editorViews.value).forEach(([key, view]) => {
+    if (!view) return;
+    const compartment = themeCompartments.value[key];
+    const pane = panes.value.find(p => p.key === key);
+    if (compartment && pane) {
+      view.dispatch({ effects: compartment.reconfigure(getThemeExtension(pane.theme)) });
+    }
+  });
+});
 
 // 编辑器实例引用
 const editorRefs = ref<Record<string, any>>({});
@@ -1567,9 +1615,15 @@ useResizeObserver(rightContainerRef, (entries) => {
 onMounted(async () => {
   await getSchemas();
   loadPaneFromCache(currentPane.value);
+  // 监听HTML元素的class变化，以便在dark模式切换时更新编辑器主题
+  darkModeObserver.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ['class']
+  });
 });
 
 onUnmounted(() => {
+  darkModeObserver.disconnect();
 });
 </script>
 
@@ -2089,5 +2143,41 @@ html.dark .vxe-table--body-wrapper::-webkit-scrollbar-thumb {
 }
 html.dark .vxe-table--body-wrapper::-webkit-scrollbar-track {
   background-color: #18181c;
+}
+
+/* CodeMirror Cursor Color - Dark Mode - 使用更强的选择器 */
+html.dark .cm-editor .cm-cursorLayer .cm-cursor,
+html.dark .cm-editor .cm-cursorLayer .cm-cursor-primary,
+html.dark .cm-editor.cm-focused .cm-cursorLayer .cm-cursor,
+html.dark .cm-editor.cm-focused .cm-cursorLayer .cm-cursor-primary {
+  border-left: 1.2px solid #fff !important;
+}
+html.dark .cm-cursor,
+html.dark .cm-cursor-primary {
+  border-left: 1.2px solid #fff !important;
+}
+html.dark .cm-dropCursor {
+  border-left: 1.2px solid #fff !important;
+}
+html.dark .cm-content,
+html.dark .cm-line {
+  caret-color: #fff !important;
+}
+
+/* CodeMirror Cursor Color - Light Mode */
+html:not(.dark) .cm-editor .cm-cursorLayer .cm-cursor,
+html:not(.dark) .cm-editor .cm-cursorLayer .cm-cursor-primary,
+html:not(.dark) .cm-editor.cm-focused .cm-cursorLayer .cm-cursor {
+  border-left: 1.2px solid #000 !important;
+}
+html:not(.dark) .cm-cursor,
+html:not(.dark) .cm-cursor-primary {
+  border-left: 1.2px solid #000 !important;
+}
+html:not(.dark) .cm-dropCursor {
+  border-left: 1.2px solid #000 !important;
+}
+html:not(.dark) .cm-content {
+  caret-color: #000 !important;
 }
 </style>
