@@ -378,7 +378,27 @@ function customSQLCompletion(context: any) {
     
     // 扫描当前文档中出现过的表名（上下文感知）
     const docText = context.state.doc.toString();
-    const foundWords = new Set(docText.match(/\b\w+\b/g) || []);
+    
+    // 解析当前 SQL 语句中实际使用的表名（FROM 和 JOIN 后面的表）
+    // 匹配 FROM tablename 或 JOIN tablename 格式
+    const usedTablesInSQL = new Set<string>();
+    const fromJoinPattern = /\b(?:FROM|JOIN)\s+[`"']?(\w+)[`"']?/gi;
+    let tableMatch;
+    while ((tableMatch = fromJoinPattern.exec(docText)) !== null) {
+      const tblName = tableMatch[1];
+      // 只有当表名在 metadata 中存在时才添加
+      if (metadata.tables[tblName]) {
+        usedTablesInSQL.add(tblName);
+      }
+    }
+    // 也匹配 UPDATE tablename 格式
+    const updatePattern = /\bUPDATE\s+[`"']?(\w+)[`"']?/gi;
+    while ((tableMatch = updatePattern.exec(docText)) !== null) {
+      const tblName = tableMatch[1];
+      if (metadata.tables[tblName]) {
+        usedTablesInSQL.add(tblName);
+      }
+    }
     
     // 检测当前上下文是否处于 FROM 或 JOIN 之后
     // 使用关键字检测代替简单的正则，以避免 "FROM table WHERE" 被误判
@@ -412,21 +432,27 @@ function customSQLCompletion(context: any) {
       }
     });
 
-    // C. 如果处于条件上下文且上一个词是字段名，提示运算符
-    if (isConditionContext && allColumnNames.has(prevTokenField)) {
+    // C. 判断上一个词是否是字段名（用于后续调整优先级）
+    const isPrevTokenColumn = allColumnNames.has(prevTokenField);
+    
+    // 如果处于条件上下文且上一个词是字段名，提示运算符（最高优先级）
+    if (isConditionContext && isPrevTokenColumn) {
        const operators = [
-         { label: '=', type: 'keyword', detail: 'Operator', boost: 40 }, // 优先级最高
-         { label: '!=', type: 'keyword', detail: 'Operator', boost: 35 },
-         { label: '<>', type: 'keyword', detail: 'Operator', boost: 35 },
-         { label: '>', type: 'keyword', detail: 'Operator', boost: 30 },
-         { label: '>=', type: 'keyword', detail: 'Operator', boost: 30 },
-         { label: '<', type: 'keyword', detail: 'Operator', boost: 30 },
-         { label: '<=', type: 'keyword', detail: 'Operator', boost: 30 },
-         { label: 'IN', type: 'keyword', detail: 'Operator', boost: 28 },
-         { label: 'LIKE', type: 'keyword', detail: 'Operator', boost: 28 },
-         { label: 'NOT IN', type: 'keyword', detail: 'Operator', boost: 28 },
-         { label: 'IS NULL', type: 'keyword', detail: 'Operator', boost: 28 },
-         { label: 'IS NOT NULL', type: 'keyword', detail: 'Operator', boost: 28 }
+         { label: '=', type: 'keyword', detail: 'Operator', boost: 100 }, // 最高优先级
+         { label: '!=', type: 'keyword', detail: 'Operator', boost: 95 },
+         { label: '<>', type: 'keyword', detail: 'Operator', boost: 95 },
+         { label: '>', type: 'keyword', detail: 'Operator', boost: 90 },
+         { label: '>=', type: 'keyword', detail: 'Operator', boost: 90 },
+         { label: '<', type: 'keyword', detail: 'Operator', boost: 90 },
+         { label: '<=', type: 'keyword', detail: 'Operator', boost: 90 },
+         { label: 'IN', type: 'keyword', detail: 'Operator', boost: 85 },
+         { label: 'LIKE', type: 'keyword', detail: 'Operator', boost: 85 },
+         { label: 'NOT IN', type: 'keyword', detail: 'Operator', boost: 85 },
+         { label: 'IS NULL', type: 'keyword', detail: 'Operator', boost: 85 },
+         { label: 'IS NOT NULL', type: 'keyword', detail: 'Operator', boost: 85 },
+         { label: 'BETWEEN', type: 'keyword', detail: 'Operator', boost: 80 },
+         { label: 'NOT LIKE', type: 'keyword', detail: 'Operator', boost: 80 },
+         { label: 'REGEXP', type: 'keyword', detail: 'Operator', boost: 75 }
        ];
        options.push(...operators);
     }
@@ -476,20 +502,112 @@ function customSQLCompletion(context: any) {
     if (metadata.tables[prevToken]) {
        const afterTableOptions = [
          { label: 'WHERE', type: 'keyword', detail: 'Keyword', boost: 60 },
+         { label: 'ORDER BY', type: 'keyword', detail: 'Keyword', boost: 58 },
+         { label: 'GROUP BY', type: 'keyword', detail: 'Keyword', boost: 57 },
+         { label: 'LIMIT', type: 'keyword', detail: 'Keyword', boost: 56 },
          { label: ',', type: 'keyword', detail: 'Separator', boost: 55 },
          { label: 'INNER', type: 'keyword', detail: 'Keyword', boost: 50 },
          { label: 'OUTER', type: 'keyword', detail: 'Keyword', boost: 50 },
-         { label: 'LEFT()', type: 'function', detail: 'Function', boost: 50 },
-         { label: 'RIGHT()', type: 'function', detail: 'Function', boost: 50 },
+         { label: 'LEFT JOIN', type: 'keyword', detail: 'Keyword', boost: 50 },
+         { label: 'RIGHT JOIN', type: 'keyword', detail: 'Keyword', boost: 50 },
          { label: 'CROSS', type: 'keyword', detail: 'Keyword', boost: 45 },
          { label: 'JOIN', type: 'keyword', detail: 'Keyword', boost: 45 },
          { label: 'STRAIGHT_JOIN', type: 'keyword', detail: 'Keyword', boost: 45 },
-         { label: 'FALSE', type: 'constant', detail: 'Boolean', boost: 40 },
-         { label: 'TRUE', type: 'constant', detail: 'Boolean', boost: 40 },
-         { label: 'UNKNOWN', type: 'constant', detail: 'Value', boost: 40 }
+         { label: 'HAVING', type: 'keyword', detail: 'Keyword', boost: 40 }
        ];
        options.push(...afterTableOptions);
     }
+
+    // F. 检测 ORDER BY / GROUP BY 上下文，提示字段和排序方向
+    const isOrderByContext = lastKeyword === 'ORDER BY';
+    const isGroupByContext = lastKeyword === 'GROUP BY';
+    
+    if (isOrderByContext || isGroupByContext) {
+      // 提示排序方向（仅 ORDER BY）
+      if (isOrderByContext) {
+        options.push(
+          { label: 'ASC', type: 'keyword', detail: 'Ascending', boost: 50 },
+          { label: 'DESC', type: 'keyword', detail: 'Descending', boost: 50 }
+        );
+      }
+      // 提示 LIMIT（ORDER BY 后常用）
+      options.push(
+        { label: 'LIMIT', type: 'keyword', detail: 'Keyword', boost: 45 }
+      );
+    }
+
+    // G. 通用 SQL 关键字提示（始终可用，但优先级较低）
+    const commonKeywords = [
+      { label: 'SELECT', type: 'keyword', detail: 'Keyword', boost: -10 },
+      { label: 'FROM', type: 'keyword', detail: 'Keyword', boost: -10 },
+      { label: 'WHERE', type: 'keyword', detail: 'Keyword', boost: -10 },
+      { label: 'AND', type: 'keyword', detail: 'Keyword', boost: -10 },
+      { label: 'OR', type: 'keyword', detail: 'Keyword', boost: -10 },
+      { label: 'ORDER BY', type: 'keyword', detail: 'Keyword', boost: -10 },
+      { label: 'GROUP BY', type: 'keyword', detail: 'Keyword', boost: -10 },
+      { label: 'HAVING', type: 'keyword', detail: 'Keyword', boost: -10 },
+      { label: 'LIMIT', type: 'keyword', detail: 'Keyword', boost: -10 },
+      { label: 'OFFSET', type: 'keyword', detail: 'Keyword', boost: -10 },
+      { label: 'JOIN', type: 'keyword', detail: 'Keyword', boost: -10 },
+      { label: 'LEFT JOIN', type: 'keyword', detail: 'Keyword', boost: -10 },
+      { label: 'RIGHT JOIN', type: 'keyword', detail: 'Keyword', boost: -10 },
+      { label: 'INNER JOIN', type: 'keyword', detail: 'Keyword', boost: -10 },
+      { label: 'OUTER JOIN', type: 'keyword', detail: 'Keyword', boost: -10 },
+      { label: 'ON', type: 'keyword', detail: 'Keyword', boost: -10 },
+      { label: 'AS', type: 'keyword', detail: 'Keyword', boost: -10 },
+      { label: 'DISTINCT', type: 'keyword', detail: 'Keyword', boost: -10 },
+      { label: 'UNION', type: 'keyword', detail: 'Keyword', boost: -10 },
+      { label: 'UNION ALL', type: 'keyword', detail: 'Keyword', boost: -10 },
+      { label: 'INSERT INTO', type: 'keyword', detail: 'Keyword', boost: -10 },
+      { label: 'UPDATE', type: 'keyword', detail: 'Keyword', boost: -10 },
+      { label: 'DELETE FROM', type: 'keyword', detail: 'Keyword', boost: -10 },
+      { label: 'SET', type: 'keyword', detail: 'Keyword', boost: -10 },
+      { label: 'VALUES', type: 'keyword', detail: 'Keyword', boost: -10 },
+      { label: 'ASC', type: 'keyword', detail: 'Ascending', boost: -10 },
+      { label: 'DESC', type: 'keyword', detail: 'Descending', boost: -10 },
+      { label: 'BETWEEN', type: 'keyword', detail: 'Keyword', boost: -10 },
+      { label: 'IN', type: 'keyword', detail: 'Keyword', boost: -10 },
+      { label: 'NOT', type: 'keyword', detail: 'Keyword', boost: -10 },
+      { label: 'LIKE', type: 'keyword', detail: 'Keyword', boost: -10 },
+      { label: 'IS NULL', type: 'keyword', detail: 'Keyword', boost: -10 },
+      { label: 'IS NOT NULL', type: 'keyword', detail: 'Keyword', boost: -10 },
+      { label: 'EXISTS', type: 'keyword', detail: 'Keyword', boost: -10 },
+      { label: 'CASE', type: 'keyword', detail: 'Keyword', boost: -10 },
+      { label: 'WHEN', type: 'keyword', detail: 'Keyword', boost: -10 },
+      { label: 'THEN', type: 'keyword', detail: 'Keyword', boost: -10 },
+      { label: 'ELSE', type: 'keyword', detail: 'Keyword', boost: -10 },
+      { label: 'END', type: 'keyword', detail: 'Keyword', boost: -10 },
+      { label: 'NULL', type: 'constant', detail: 'Value', boost: -10 },
+      { label: 'TRUE', type: 'constant', detail: 'Boolean', boost: -10 },
+      { label: 'FALSE', type: 'constant', detail: 'Boolean', boost: -10 }
+    ];
+    options.push(...commonKeywords);
+
+    // 首先添加当前 SQL 中实际使用的表的字段
+    usedTablesInSQL.forEach((tableName) => {
+      const info = metadata.tables[tableName];
+      if (info && info.columns) {
+        info.columns.forEach((col: any) => {
+          // 根据上下文调整字段优先级：
+          // - 如果上一个词是字段名，说明需要运算符，字段优先级降低
+          // - 如果在 FROM/JOIN 后，字段优先级降低
+          // - 否则字段优先级较高
+          let colBoost = 50;
+          if (isPrevTokenColumn && isConditionContext) {
+            colBoost = 20; // 上一个词是字段名，降低优先级让运算符优先
+          } else if (isTableContext) {
+            colBoost = -5; // FROM/JOIN 后应该是表名
+          }
+          
+          options.push({
+            label: col.name,
+            type: 'column',
+            detail: `${col.type} · ${tableName}`, // 优化显示格式：类型 · 表名
+            boost: colBoost 
+          });
+        });
+      }
+    });
 
     tableNames.forEach((name) => {
       const info = metadata.tables[name];
@@ -505,12 +623,12 @@ function customSQLCompletion(context: any) {
         boost: tableBoost 
       });
 
-      // B. 如果该表在文档中出现过，添加其字段
-      if (foundWords.has(name) && info.columns) {
+      // B. 只有当表不在当前 SQL 使用的表中时，才以较低优先级添加其字段
+      // 避免重复添加已经在上面添加过的当前表字段
+      if (!usedTablesInSQL.has(name) && info.columns) {
+        // 不在当前 SQL 中使用的表的字段，优先级很低
         info.columns.forEach((col: any) => {
-          // 如果处于 FROM/JOIN 后，降低字段优先级，避免干扰表选择
-          // 否则保持较高优先级方便 SELECT/WHERE
-          const colBoost = isTableContext ? -5 : 20;
+          const colBoost = isTableContext ? -10 : -5;
           
           options.push({
             label: col.name,
