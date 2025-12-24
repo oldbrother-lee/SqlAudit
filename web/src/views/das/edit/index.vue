@@ -197,6 +197,12 @@ const currentSchemaLabel = computed(() => {
   return `${selectedSchema.value.schema} · ${type}`;
 });
 
+const schemaError = ref<string | null>(null);
+
+// OS Detection for Tooltip
+const isMac = navigator.userAgent.includes('Mac');
+const executeTooltip = computed(() => isMac ? '执行 Cmd+Enter' : '执行 Control+Enter');
+
 // CodeMirror: per-pane editor实例及可重配置主题
 const editorViews = ref<Record<string, EditorView | null>>({});
 const themeCompartments = ref<Record<string, Compartment>>({});
@@ -704,7 +710,7 @@ class ExecuteMarker extends GutterMarker {
     div.style.width = '100%';
     div.style.height = '100%';
     div.style.pointerEvents = 'auto';
-    div.title = '执行选中 SQL'; // Add tooltip
+    div.title = executeTooltip.value; // Add tooltip
     
     // Use a filled SVG icon for better visibility
     div.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>`;
@@ -784,6 +790,27 @@ function createEditor(pane: EditorPane, el: HTMLElement) {
       history(),
       keymap.of([
         {
+          key: 'Mod-Enter',
+          run: () => {
+            executeSQL(pane);
+            return true;
+          }
+        },
+        {
+          key: 'Ctrl-Enter',
+          run: () => {
+            executeSQL(pane);
+            return true;
+          }
+        },
+        {
+          key: 'Cmd-Enter',
+          run: () => {
+            executeSQL(pane);
+            return true;
+          }
+        },
+        {
           key: 'Enter',
           run: insertNewlineAndIndent
         },
@@ -791,14 +818,7 @@ function createEditor(pane: EditorPane, el: HTMLElement) {
         ...historyKeymap,
         ...foldKeymap,
         ...completionKeymap,
-        indentWithTab,
-        {
-          key: 'Mod-Enter',
-          run: () => {
-            executeSQL(pane);
-            return true;
-          }
-        }
+        indentWithTab
       ]),
       // 使用默认内置补全来源，并启用输入时触发
       autocompletion({ activateOnTyping: true, maxRenderedOptions: 50 }),
@@ -965,6 +985,7 @@ const getTables = async (value: string) => {
   showSearch.value = true;
   treeLoading.value = true;
   leftTableSearch.value = '';
+  schemaError.value = null;
   
   const vals = value.split('#');
   selectedSchema.value = {
@@ -979,13 +1000,20 @@ const getTables = async (value: string) => {
   };
   
   try {
-    const { data } = await fetchTables(params);
+    const { data, error } = await fetchTables(params);
+    if (error) {
+      const msg = (error as any).response?.data?.message || (error as any).message || '加载失败';
+      schemaError.value = msg;
+      return;
+    }
     if (data) {
       const grants = await getGrants(selectedSchema.value);
       renderTree(grants, data);
     }
   } catch (error: any) {
-    window.$message?.error(error?.message || '加载失败');
+    const msg = error?.message || '加载失败';
+    schemaError.value = msg;
+    window.$message?.error(msg);
   } finally {
     treeLoading.value = false;
   }
@@ -998,18 +1026,26 @@ const refreshTables = async () => {
     return;
   }
   treeLoading.value = true;
+  schemaError.value = null;
   try {
-    const { data } = await fetchTables({
+    const { data, error } = await fetchTables({
       instance_id: selectedSchema.value.instance_id,
       schema: selectedSchema.value.schema
     });
+    if (error) {
+      const msg = (error as any).response?.data?.message || (error as any).message || '刷新失败';
+      schemaError.value = msg;
+      return;
+    }
     if (data) {
       const grants = await getGrants(selectedSchema.value);
       renderTree(grants, data);
       window.$message?.success('表列表已刷新');
     }
   } catch (error: any) {
-    window.$message?.error(error?.message || '刷新失败');
+    const msg = error?.message || '刷新失败';
+    schemaError.value = msg;
+    window.$message?.error(msg);
   } finally {
     treeLoading.value = false;
   }
@@ -1202,6 +1238,11 @@ const executeMySQLQuery = async (pane: EditorPane, data: any) => {
   
   try {
     const response = await fetchExecuteMySQLQuery(data);
+
+    if (response.error) {
+      throw response.error;
+    }
+
     const respData = response.data as any;
     
     resMsgs.push('结果: 执行成功');
@@ -1239,7 +1280,12 @@ const executeMySQLQuery = async (pane: EditorPane, data: any) => {
     window.$message?.success('执行成功');
   } catch (error: any) {
     resMsgs.push('结果: 执行失败');
-    resMsgs.push(`错误: ${error?.message || '未知错误'}`);
+    const backendMsg = error?.response?.data?.message || error?.response?.data?.msg || error?.message || '未知错误';
+    resMsgs.push(`错误: ${backendMsg}`);
+    const requestId = error?.response?.headers?.['x-request-id'] || error?.response?.data?.request_id;
+    if (requestId) {
+       resMsgs.push(`请求ID: ${requestId}`);
+    }
     pane.responseMsg = resMsgs.join('<br>');
     pane.result = null;
     
@@ -1261,6 +1307,11 @@ const executeClickHouseQuery = async (pane: EditorPane, data: any) => {
   
   try {
     const response = await fetchExecuteClickHouseQuery(data);
+
+    if (response.error) {
+      throw response.error;
+    }
+
     const respData = response.data as any;
     
     resMsgs.push('结果: 执行成功');
@@ -1298,7 +1349,12 @@ const executeClickHouseQuery = async (pane: EditorPane, data: any) => {
     window.$message?.success('执行成功');
   } catch (error: any) {
     resMsgs.push('结果: 执行失败');
-    resMsgs.push(`错误: ${error?.message || '未知错误'}`);
+    const backendMsg = error?.response?.data?.message || error?.response?.data?.msg || error?.message || '未知错误';
+    resMsgs.push(`错误: ${backendMsg}`);
+    const requestId = error?.response?.headers?.['x-request-id'] || error?.response?.data?.request_id;
+    if (requestId) {
+       resMsgs.push(`请求ID: ${requestId}`);
+    }
     pane.responseMsg = resMsgs.join('<br>');
     pane.result = null;
     
@@ -2047,7 +2103,8 @@ onUnmounted(() => {
               <NSpace justify="space-between" align="center" class="das-shell-header">
                 <div class="das-title">
                   <span>SQL 工作台</span>
-                  <NTag size="small" type="success">{{ currentSchemaLabel }}</NTag>
+                  <NTag size="small" :type="schemaError ? 'error' : 'success'">{{ currentSchemaLabel }}</NTag>
+                  <NText v-if="schemaError" type="error" style="font-size: 12px; font-weight: normal;">{{ schemaError }}</NText>
                 </div>
                 <!-- <NSpace :size="8" wrap>
                   <NButton quaternary size="small" @click="gotoFavorite">
@@ -2100,10 +2157,15 @@ onUnmounted(() => {
                   >
                     <template #suffix>
                       <NSpace :size="6" wrap>
-                        <NButton size="tiny" type="primary" :loading="pane.loading" @click="executeSQL(pane)">
-                          <template #icon><SvgIcon icon="carbon:flash" /></template>
-                          执行 SQL
-                        </NButton>
+                        <NTooltip trigger="hover" :show-arrow="false">
+                          <template #trigger>
+                            <NButton size="tiny" type="primary" :loading="pane.loading" @click="executeSQL(pane)">
+                              <template #icon><SvgIcon icon="carbon:flash" /></template>
+                              执行 SQL
+                            </NButton>
+                          </template>
+                          {{ executeTooltip }}
+                        </NTooltip>
                         <NTooltip trigger="hover" :show-arrow="false">
                           <template #trigger>
                             <NButton size="tiny" @click="(e) => formatSQL(pane, e.shiftKey ? 'minify' : 'format')">
@@ -2188,9 +2250,15 @@ onUnmounted(() => {
                               />
                             </div>
                           </div>
-                          <div v-else class="das-empty-holder">
-                            <NEmpty description="查询无结果" />
+                          <div v-else-if="pane.responseMsg && pane.responseMsg.includes('执行失败')" class="das-result-error">
+                            <div v-html="pane.responseMsg" style="padding: 16px; line-height: 1.8; color: #333;"></div>
                           </div>
+                          <div v-else class="das-empty-holder">
+                            <NEmpty description="暂无查询结果" />
+                          </div>
+                        </div>
+                        <div v-else-if="pane.responseMsg && pane.responseMsg.includes('执行失败')" class="das-result-error">
+                          <div v-html="pane.responseMsg" style="padding: 16px; line-height: 1.8; color: #333;"></div>
                         </div>
                         <div v-else class="das-empty-holder">
                           <NEmpty description="暂无查询结果" />

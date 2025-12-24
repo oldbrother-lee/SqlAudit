@@ -37,7 +37,10 @@ export const request = createFlatRequest<App.Service.Response, RequestInstanceSt
         return successCodes.includes(code);
       }
       // default compatibility: accept common success codes and fallback to http status
-      return code === '0000' || code === '200' || response.status === 200;
+      if (code !== '') {
+        return code === '0000' || code === '200';
+      }
+      return response.status === 200;
     },
     async onBackendFail(response, instance) {
       const authStore = useAuthStore();
@@ -127,6 +130,11 @@ export const request = createFlatRequest<App.Service.Response, RequestInstanceSt
       // when the token is expired, refresh token and retry request, so no need to show error message
       const expiredTokenCodes = import.meta.env.VITE_SERVICE_EXPIRED_TOKEN_CODES?.split(',') || [];
       if (expiredTokenCodes.includes(backendErrorCode)) {
+        return;
+      }
+
+      // Check if we should skip the global error handler
+      if (error.config && (error.config as any).skipErrorHandler) {
         return;
       }
 

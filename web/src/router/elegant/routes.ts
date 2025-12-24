@@ -213,7 +213,8 @@ export const generatedRoutes: GeneratedRoute[] = [
     component: 'layout.base',
     meta: {
       title: 'manage',
-      i18nKey: 'route.manage'
+      i18nKey: 'route.manage',
+      hideInMenu: true
     },
     children: [
       {

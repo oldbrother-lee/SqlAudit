@@ -56,6 +56,10 @@ export function setupElegantRouter() {
         meta.order = 2;
       }
 
+      if (key === 'manage') {
+        meta.hideInMenu = true;
+      }
+
       // 隐藏不需要展示的 DAS 子菜单
       if (key === 'das_favorite' || key === 'das_history' || key === 'das_orders_commit') {
         meta.hideInMenu = true;

@@ -42,8 +42,9 @@ export function fetchExecuteMySQLQuery(data: Api.Das.QueryRequest) {
   return request<Api.Das.QueryResult>({
     url: '/api/v1/das/execute/query/mysql',
     method: 'post',
-    data
-  });
+    data,
+    skipErrorHandler: true
+  } as any);
 }
 
 /**
@@ -53,8 +54,9 @@ export function fetchExecuteClickHouseQuery(data: Api.Das.QueryRequest) {
   return request<Api.Das.QueryResult>({
     url: '/api/v1/das/execute/query/clickhouse',
     method: 'post',
-    data
-  });
+    data,
+    skipErrorHandler: true
+  } as any);
 }
 
 /**
