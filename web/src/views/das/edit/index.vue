@@ -10,8 +10,8 @@ import History from '../history/index.vue';
 import Favorite from '../favorite/index.vue';
 import SvgIcon from '@/components/custom/svg-icon.vue';
 // CodeMirror 6 imports
-import { EditorState, Compartment } from '@codemirror/state';
-import { EditorView, keymap, lineNumbers } from '@codemirror/view';
+import { EditorState, Compartment, RangeSet, RangeSetBuilder } from '@codemirror/state';
+import { EditorView, keymap, lineNumbers, gutter, GutterMarker, ViewPlugin, ViewUpdate } from '@codemirror/view';
 import { defaultKeymap, history, historyKeymap, indentWithTab, insertNewlineAndIndent } from '@codemirror/commands';
 import { sql } from '@codemirror/lang-sql';
 import { foldGutter, foldKeymap, syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language';
@@ -432,6 +432,9 @@ function customSQLCompletion(context: any) {
       }
     });
 
+    // H. 针对 "o" 开头的特殊高优先级提示（定义提前，以便后续逻辑使用）
+    const isStartWithO = wordMatch.text.toLowerCase().startsWith('o');
+
     // C. 判断上一个词是否是字段名（用于后续调整优先级）
     const isPrevTokenColumn = allColumnNames.has(prevTokenField);
     
@@ -501,9 +504,12 @@ function customSQLCompletion(context: any) {
     // 检查 metadata.tables 中是否存在该表名
     if (metadata.tables[prevToken]) {
        const afterTableOptions = [
-         { label: 'WHERE', type: 'keyword', detail: 'Keyword', boost: 60 },
-         { label: 'ORDER BY', type: 'keyword', detail: 'Keyword', boost: 58 },
-         { label: 'GROUP BY', type: 'keyword', detail: 'Keyword', boost: 57 },
+        { label: 'WHERE', type: 'keyword', detail: 'Keyword', boost: 60 },
+        // 如果已通过特殊逻辑添加了 oKeywords (isStartWithO)，这里就不要重复添加
+        ...(isStartWithO ? [] : [
+          { label: 'ORDER BY', type: 'keyword', detail: 'Keyword', boost: 58 },
+        ]),
+        { label: 'GROUP BY', type: 'keyword', detail: 'Keyword', boost: 57 },
          { label: 'LIMIT', type: 'keyword', detail: 'Keyword', boost: 56 },
          { label: ',', type: 'keyword', detail: 'Separator', boost: 55 },
          { label: 'INNER', type: 'keyword', detail: 'Keyword', boost: 50 },
@@ -536,6 +542,24 @@ function customSQLCompletion(context: any) {
       );
     }
 
+    if (isStartWithO) {
+      const oKeywords = [
+        { label: 'ORDER BY', type: 'keyword', detail: 'Keyword', boost: 2000 },
+        { label: 'OUTER JOIN', type: 'keyword', detail: 'Keyword', boost: 1900 },
+        { label: 'ON', type: 'keyword', detail: 'Keyword', boost: 1800 },
+        { label: 'OR', type: 'keyword', detail: 'Keyword', boost: 1700 },
+        { label: 'ORDER', type: 'keyword', detail: 'Keyword', boost: 1600 },
+        { label: 'OF', type: 'keyword', detail: 'Keyword', boost: 1500 },
+        { label: 'OLD', type: 'keyword', detail: 'Keyword', boost: 1500 },
+        { label: 'ONLY', type: 'keyword', detail: 'Keyword', boost: 1500 },
+        { label: 'OPEN', type: 'keyword', detail: 'Keyword', boost: 1500 },
+        { label: 'OPTION', type: 'keyword', detail: 'Keyword', boost: 1500 },
+        { label: 'ORDINALITY', type: 'keyword', detail: 'Keyword', boost: 1500 },
+        { label: 'OUT', type: 'keyword', detail: 'Keyword', boost: 1500 }
+      ];
+      options.push(...oKeywords);
+    }
+
     // G. 通用 SQL 关键字提示（始终可用，但优先级较低）
     const commonKeywords = [
       { label: 'SELECT', type: 'keyword', detail: 'Keyword', boost: -10 },
@@ -543,10 +567,14 @@ function customSQLCompletion(context: any) {
       { label: 'WHERE', type: 'keyword', detail: 'Keyword', boost: -10 },
       { label: 'AND', type: 'keyword', detail: 'Keyword', boost: -10 },
       { label: 'OR', type: 'keyword', detail: 'Keyword', boost: -10 },
-      { label: 'ORDER BY', type: 'keyword', detail: 'Keyword', boost: -10 },
-      { label: 'GROUP BY', type: 'keyword', detail: 'Keyword', boost: -10 },
+      // 如果已通过特殊逻辑添加了 oKeywords，这里就不要重复添加 ORDER BY 等
+      ...(isStartWithO ? [] : [
+        { label: 'ORDER BY', type: 'keyword', detail: 'Keyword', boost: 5 },
+        { label: 'OR', type: 'keyword', detail: 'Keyword', boost: -10 },
+      ]),
+      { label: 'GROUP BY', type: 'keyword', detail: 'Keyword', boost: 5 },
       { label: 'HAVING', type: 'keyword', detail: 'Keyword', boost: -10 },
-      { label: 'LIMIT', type: 'keyword', detail: 'Keyword', boost: -10 },
+      { label: 'LIMIT', type: 'keyword', detail: 'Keyword', boost: 5 },
       { label: 'OFFSET', type: 'keyword', detail: 'Keyword', boost: -10 },
       { label: 'JOIN', type: 'keyword', detail: 'Keyword', boost: -10 },
       { label: 'LEFT JOIN', type: 'keyword', detail: 'Keyword', boost: -10 },
@@ -650,13 +678,102 @@ function customSQLCompletion(context: any) {
   return null;
 }
 
+// Custom gutter markers
+class LineNumberMarker extends GutterMarker {
+  constructor(public number: number) { super(); }
+  eq(other: GutterMarker) {
+    return other instanceof LineNumberMarker && this.number === other.number;
+  }
+  toDOM() {
+    return document.createTextNode(this.number.toString());
+  }
+}
+
+class ExecuteMarker extends GutterMarker {
+  constructor(private execute: () => void) { super(); }
+  eq(other: GutterMarker) {
+    return other instanceof ExecuteMarker;
+  }
+  toDOM() {
+    const div = document.createElement('div');
+    div.style.cursor = 'pointer';
+    div.style.color = '#18a058'; // Use green color similar to Naive UI primary
+    div.style.display = 'flex';
+    div.style.justifyContent = 'center';
+    div.style.alignItems = 'center';
+    div.style.width = '100%';
+    div.style.height = '100%';
+    div.style.pointerEvents = 'auto';
+    div.title = '执行选中 SQL'; // Add tooltip
+    
+    // Use a filled SVG icon for better visibility
+    div.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>`;
+    
+    // Add hover effect via JS since we are in a component
+    div.onmouseenter = () => { div.style.color = '#36ad6a'; div.style.transform = 'scale(1.1)'; div.style.transition = 'all 0.2s'; };
+    div.onmouseleave = () => { div.style.color = '#18a058'; div.style.transform = 'scale(1)'; };
+
+    // Use mousedown to prevent editor selection interference and ensure event capture
+    div.onmousedown = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      this.execute();
+    };
+    return div;
+  }
+}
+
+const createExecuteGutter = (execute: () => void) => {
+  const executeLinePlugin = ViewPlugin.fromClass(class {
+    markers: RangeSet<GutterMarker>;
+    constructor(view: EditorView) {
+      this.markers = this.buildMarkers(view);
+    }
+    update(update: ViewUpdate) {
+      if (update.docChanged || update.selectionSet || update.viewportChanged) {
+        this.markers = this.buildMarkers(update.view);
+      }
+    }
+    buildMarkers(view: EditorView) {
+      const builder = new RangeSetBuilder<GutterMarker>();
+      const lines = view.state.doc.lines;
+      
+      const executeButtonLines = new Set<number>();
+      for (const range of view.state.selection.ranges) {
+        if (range.empty) continue;
+        const startLine = view.state.doc.lineAt(range.from).number;
+        executeButtonLines.add(startLine);
+      }
+
+      for (let i = 1; i <= lines; i++) {
+        const line = view.state.doc.line(i);
+        if (executeButtonLines.has(i)) {
+          builder.add(line.from, line.from, new ExecuteMarker(execute));
+        } else {
+          builder.add(line.from, line.from, new LineNumberMarker(i));
+        }
+      }
+      return builder.finish();
+    }
+  });
+
+  return [
+    executeLinePlugin,
+    gutter({
+      class: "cm-lineNumbers",
+      markers: v => v.plugin(executeLinePlugin)?.markers || RangeSet.empty,
+      initialSpacer: (view) => new LineNumberMarker(view.state.doc.lines)
+    })
+  ];
+};
+
 function createEditor(pane: EditorPane, el: HTMLElement) {
   // 若该 pane 已创建过编辑器，则避免重复创建以防渲染循环
   if (editorViews.value[pane.key]) return;
   const state = EditorState.create({
     doc: pane.sql || '',
     extensions: [
-      lineNumbers(),
+      createExecuteGutter(() => executeSQL(pane)),
       foldGutter(),
       // 语言通过 Compartment 动态配置（便于后续更新 schema）
       (languageCompartments.value[pane.key] = new Compartment()).of(sql({ schema: schemaForCompletion(), upperCaseKeywords: true })),
@@ -1730,6 +1847,105 @@ useResizeObserver(rightContainerRef, (entries) => {
   }
 });
 
+// Context Menu Logic
+const showContextMenu = ref(false);
+const contextMenuX = ref(0);
+const contextMenuY = ref(0);
+const contextMenuPane = ref<EditorPane | null>(null);
+const hasSelection = ref(false);
+
+const contextMenuOptions = computed(() => [
+  {
+    label: '执行选中 SQL',
+    key: 'execute',
+    icon: () => h(SvgIcon, { icon: 'carbon:flash' }),
+    disabled: !hasSelection.value
+  },
+  {
+    type: 'divider',
+    key: 'd1'
+  },
+  {
+    label: '复制',
+    key: 'copy',
+    icon: () => h(SvgIcon, { icon: 'carbon:copy' }),
+    disabled: !hasSelection.value
+  },
+  {
+    label: '剪切',
+    key: 'cut',
+    icon: () => h(SvgIcon, { icon: 'carbon:cut' }),
+    disabled: !hasSelection.value
+  },
+  {
+    type: 'divider',
+    key: 'd2'
+  },
+  {
+    label: '格式化 SQL',
+    key: 'format',
+    icon: () => h(SvgIcon, { icon: 'carbon:code' })
+  }
+]);
+
+const handleContextMenu = (e: MouseEvent, pane: EditorPane) => {
+  e.preventDefault();
+  
+  // Check if there is a selection
+  const view = toRaw(editorViews.value[pane.key]);
+  if (!view) return;
+  
+  const ranges = view.state.selection.ranges;
+  hasSelection.value = ranges.some(r => !r.empty);
+  
+  showContextMenu.value = false;
+  nextTick(() => {
+    showContextMenu.value = true;
+    contextMenuX.value = e.clientX;
+    contextMenuY.value = e.clientY;
+    contextMenuPane.value = pane;
+  });
+};
+
+const handleContextSelect = async (key: string) => {
+  showContextMenu.value = false;
+  const pane = contextMenuPane.value;
+  if (!pane) return;
+
+  if (key === 'execute') {
+    executeSQL(pane);
+  } else if (key === 'format') {
+    formatSQL(pane, 'format');
+  } else if (key === 'copy' || key === 'cut') {
+    const view = toRaw(editorViews.value[pane.key]);
+    if (!view) return;
+    
+    const ranges = view.state.selection.ranges;
+    const text = ranges
+      .filter(r => !r.empty)
+      .map(r => view.state.sliceDoc(r.from, r.to))
+      .join('\n');
+      
+    if (!text) return;
+
+    try {
+      await navigator.clipboard.writeText(text);
+      if (key === 'cut') {
+        view.dispatch(view.state.replaceSelection(''));
+        window.$message?.success('已剪切');
+      } else {
+        window.$message?.success('已复制');
+      }
+    } catch (err) {
+      window.$message?.error('操作失败，请检查浏览器权限');
+    }
+  }
+};
+
+const onClickOutside = () => {
+  showContextMenu.value = false;
+};
+
 onMounted(async () => {
   await getSchemas();
   loadPaneFromCache(currentPane.value);
@@ -1866,7 +2082,7 @@ onUnmounted(() => {
               >
                 <NSpace vertical :size="0">
                   <div class="code-editor-wrapper">
-                    <div class="code-editor-container" :style="{ height: (pane.editorHeight || 300) + 'px' }" :ref="(el) => setEditorRef(pane, el as unknown as HTMLElement)" />
+                    <div class="code-editor-container" :style="{ height: (pane.editorHeight || 300) + 'px' }" :ref="(el) => setEditorRef(pane, el as unknown as HTMLElement)" @contextmenu="handleContextMenu($event, pane)" />
                     <div class="resize-handle" @mousedown.prevent="onResizeStart($event, pane)">
                       <div class="resize-handle-bar"></div>
                     </div>
@@ -2001,6 +2217,17 @@ onUnmounted(() => {
         ></iframe>
       </div>
     </NModal>
+
+    <NDropdown
+      placement="bottom-start"
+      trigger="manual"
+      :x="contextMenuX"
+      :y="contextMenuY"
+      :options="contextMenuOptions"
+      :show="showContextMenu"
+      :on-clickoutside="onClickOutside"
+      @select="handleContextSelect"
+    />
   </NCard>
 </template>
 
