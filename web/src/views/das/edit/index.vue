@@ -1329,6 +1329,11 @@ function getSqlToExecute(p: EditorPane): string {
 
 const executeSQL = (pane?: EditorPane) => {
   const p = pane || currentPane.value;
+  
+  // Ensure editor is focused so selection remains visible/active
+  const view = toRaw(editorViews.value[p.key]);
+  view?.focus();
+
   saveCodeToCache(p);
 
   if (Object.keys(selectedSchema.value).length === 0) {
